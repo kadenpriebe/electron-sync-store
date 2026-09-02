@@ -1,36 +1,43 @@
 import { app, BrowserWindow } from "electron";
 import path from "node:path";
+import { createMainStore } from "../src/main";
+import { initialState, reducer, type AppAction, type AppState } from "./state";
 
-function createWindow(): void {
+function createWindow(offsetX: number): BrowserWindow {
   const win = new BrowserWindow({
-    width: 900,
-    height: 600,
+    width: 460,
+    height: 520,
+    x: 120 + offsetX,
+    y: 120,
     webPreferences: {
-      // Both of these are already the defaults in modern Electron.
-      // They are stated explicitly because the whole architecture of
-      // this library depends on them: the renderer cannot reach Node,
-      // so a preload script + contextBridge is the only way across.
+      // Both are already the modern defaults. They are stated explicitly
+      // because the entire architecture depends on them: the renderer cannot
+      // reach Node, so the preload bridge is the only way across.
       contextIsolation: true,
       nodeIntegration: false,
+      preload: path.join(__dirname, "preload.js"),
     },
   });
 
   void win.loadFile(path.join(__dirname, "index.html"));
+  return win;
 }
 
 app.whenReady().then(() => {
-  createWindow();
+  // The store lives in main and is created once, before any window exists.
+  createMainStore<AppState, AppAction>(reducer, initialState);
 
-  // macOS: clicking the dock icon with no windows open reopens one.
+  // Two windows, so that state sharing is visible rather than claimed.
+  createWindow(0);
+  createWindow(500);
+
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+      createWindow(0);
     }
   });
 });
 
-// Windows/Linux: closing every window quits. macOS apps traditionally stay
-// running, which is why this is platform-conditional.
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     app.quit();

@@ -5,7 +5,9 @@
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
   "scripts": {
-    "build": "tsc && cp example/index.html dist/example/",
+    "build": "tsc && npm run build:preload && npm run build:renderer && cp example/index.html dist/example/",
+    "build:preload": "esbuild example/preload.ts --bundle --outfile=dist/example/preload.js --format=cjs --platform=node --external:electron",
+    "build:renderer": "esbuild example/renderer.ts --bundle --outfile=dist/example/renderer.js --format=iife --platform=browser",
     "typecheck": "tsc --noEmit",
     "start": "npm run build && electron dist/example/main.js",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -22,6 +24,7 @@
   "devDependencies": {
     "@types/node": "^26.4.1",
     "electron": "^44.1.1",
+    "esbuild": "^0.28.2",
     "typescript": "^7.0.2"
   }
 }

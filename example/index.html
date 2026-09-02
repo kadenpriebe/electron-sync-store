@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
     />
     <title>electron-sync-store — example</title>
     <style>
@@ -12,10 +12,59 @@
         font-family: system-ui, sans-serif;
         margin: 0;
         padding: 2rem;
+        color: #1a1a1a;
+        background: #fafaf8;
+      }
+      h1 {
+        font-size: 1rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #6b6b6b;
+        margin: 0 0 1.5rem;
+      }
+      .count {
+        font-size: 4rem;
+        font-variant-numeric: tabular-nums;
+        margin: 0 0 1rem;
+      }
+      button {
+        font: inherit;
+        padding: 0.5rem 1.25rem;
+        margin-right: 0.5rem;
+        border: 1px solid #c9c9c4;
+        border-radius: 6px;
+        background: #fff;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #f0f0ec;
+      }
+      label {
+        display: block;
+        margin-top: 2rem;
+        font-size: 0.85rem;
+        color: #6b6b6b;
+      }
+      input {
+        font: inherit;
+        padding: 0.4rem 0.6rem;
+        border: 1px solid #c9c9c4;
+        border-radius: 6px;
+        margin-top: 0.35rem;
       }
     </style>
   </head>
   <body>
-    <h1>Renderer is alive</h1>
+    <h1>electron-sync-store</h1>
+
+    <p class="count" id="count">—</p>
+    <button id="dec">−</button>
+    <button id="inc">+</button>
+
+    <label for="user-input">user</label>
+    <input id="user-input" type="text" />
+    <p>state.user is <strong id="user">—</strong></p>
+
+    <script src="renderer.js"></script>
   </body>
 </html>
