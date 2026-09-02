@@ -1,0 +1,27 @@
+{
+  "name": "electron-sync-store",
+  "version": "0.1.0",
+  "description": "Synchronous global state across Electron's main and renderer processes.",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "scripts": {
+    "build": "tsc && cp example/index.html dist/example/",
+    "typecheck": "tsc --noEmit",
+    "start": "npm run build && electron dist/example/main.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "electron",
+    "state-management",
+    "ipc",
+    "typescript"
+  ],
+  "author": "kadenpriebe",
+  "license": "MIT",
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "electron": "^44.1.1",
+    "typescript": "^7.0.2"
+  }
+}

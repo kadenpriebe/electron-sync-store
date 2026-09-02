@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    /* node16 emits CommonJS here because package.json says "type": "commonjs".
+       Electron's main process and sandboxed preload scripts both want CJS. */
+    "module": "node16",
+    "moduleResolution": "node16",
+    "lib": ["ES2022", "DOM"],
+
+    "rootDir": ".",
+    "outDir": "dist",
+
+    /* This is a library: emit type declarations for consumers. */
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+
+    /* Strictness is the point of the project. */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true
+  },
+  "include": ["src", "example"]
+}
