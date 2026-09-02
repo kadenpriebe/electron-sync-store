@@ -8,6 +8,11 @@
  */
 
 export const CHANNELS = {
+  /**
+   * Bootstrap only. The preload script blocks on this exactly once, before
+   * the page's own JavaScript runs, so that the first read is already local.
+   */
+  snapshotSync: "electron-sync-store:snapshot-sync",
   /** Renderer asks main for the current state. Request/response. */
   snapshot: "electron-sync-store:snapshot",
   /** Renderer proposes a change. Fire and forget; main is the only writer. */

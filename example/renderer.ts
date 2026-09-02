@@ -7,8 +7,8 @@ function el<T extends HTMLElement>(id: string): T {
   return node as T;
 }
 
-async function start(): Promise<void> {
-  const store = await createRendererStore<AppState, AppAction>();
+function start(): void {
+  const store = createRendererStore<AppState, AppAction>();
 
   const count = el("count");
   const user = el("user");
@@ -22,7 +22,8 @@ async function start(): Promise<void> {
     }
   }
 
-  // A synchronous read. No await, no IPC, no loading state.
+  // A synchronous read on the first line of app code. No await anywhere in
+  // this file, and no loading state — the value is already local.
   render(store.getState());
 
   store.subscribe(render);
@@ -40,4 +41,4 @@ async function start(): Promise<void> {
   });
 }
 
-void start();
+start();

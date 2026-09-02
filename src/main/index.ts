@@ -16,7 +16,17 @@ export function createMainStore<S, A>(
 ): Store<S, A> {
   const store = createStore(reducer, initialState);
 
-  // Startup: a renderer asks for the current state and awaits the answer.
+  // Bootstrap. Answered synchronously so a preload can block on it before the
+  // page exists. Setting event.returnValue is what unblocks ipcRenderer.sendSync.
+  //
+  // This handler must be registered before any window is created, or that
+  // window's preload will block forever waiting for a reply that no one is
+  // listening for. createMainStore() is therefore called during app startup.
+  ipcMain.on(CHANNELS.snapshotSync, (event) => {
+    event.returnValue = store.getState();
+  });
+
+  // Resync. Same data, asynchronously, for callers that are already running.
   ipcMain.handle(CHANNELS.snapshot, () => store.getState());
 
   // Writes: fire-and-forget from the renderer's point of view, so dispatching

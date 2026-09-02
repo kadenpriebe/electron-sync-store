@@ -17,14 +17,14 @@ declare global {
  * the copy is briefly stale: for roughly one IPC hop after a change, this
  * mirror still reports the previous value.
  *
- * Note that creating the store is asynchronous, because the first snapshot has
- * to be fetched before there is anything to read. Every consumer therefore has
- * to await startup before it can read anything — a limitation addressed later.
+ * Creating the store is itself synchronous. The preload has already fetched
+ * the first snapshot before this file runs, so there is nothing to await and
+ * no window during which the state is unknown.
  */
-export async function createRendererStore<S, A>(): Promise<Store<S, A>> {
+export function createRendererStore<S, A>(): Store<S, A> {
   const bridge = window.__electronSyncStore;
 
-  let mirror = (await bridge.snapshot()) as S;
+  let mirror = bridge.initialState as S;
   const listeners = new Set<Listener<S>>();
 
   bridge.onUpdate((state) => {
