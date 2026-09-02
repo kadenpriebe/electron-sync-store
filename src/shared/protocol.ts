@@ -23,3 +23,16 @@ export const CHANNELS = {
 
 /** The key the preload bridge is exposed under on `window`. */
 export const BRIDGE_KEY = "__electronSyncStore" as const;
+
+/**
+ * Everything that crosses the boundary carries a sequence number.
+ *
+ * `seq` is main's count of how many changes have been applied, ever. A mirror
+ * that receives seq n while holding n-1 knows it is exactly one change behind
+ * and can apply the update directly. Any other relationship means its view of
+ * history has a hole in it, and it must ask for a full snapshot instead.
+ */
+export type Snapshot<S> = {
+  state: S;
+  seq: number;
+};

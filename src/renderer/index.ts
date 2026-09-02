@@ -1,5 +1,6 @@
 import type { Listener, Store, Unsubscribe } from "../core/store";
 import type { SyncStoreBridge } from "../preload";
+import type { Snapshot } from "../shared/protocol";
 
 declare global {
   interface Window {
@@ -24,14 +25,58 @@ declare global {
 export function createRendererStore<S, A>(): Store<S, A> {
   const bridge = window.__electronSyncStore;
 
-  let mirror = bridge.initialState as S;
+  const bootstrap = bridge.initialState as Snapshot<S>;
+
+  let mirror = bootstrap.state;
+  let lastSeq = bootstrap.seq;
+  let resyncInFlight = false;
+
   const listeners = new Set<Listener<S>>();
 
-  bridge.onUpdate((state) => {
-    mirror = state as S;
+  function notify(): void {
     for (const listener of [...listeners]) {
       listener(mirror);
     }
+  }
+
+  /**
+   * Recover from a hole in history by asking main for the truth.
+   *
+   * Guarded against overlapping runs, and the result is only applied if it is
+   * actually newer than what arrived while it was in flight — otherwise a slow
+   * snapshot could overwrite fresher state with staler state.
+   */
+  async function resync(): Promise<void> {
+    if (resyncInFlight) return;
+    resyncInFlight = true;
+    try {
+      const snapshot = (await bridge.snapshot()) as Snapshot<S>;
+      if (snapshot.seq > lastSeq) {
+        lastSeq = snapshot.seq;
+        mirror = snapshot.state;
+        notify();
+      }
+    } finally {
+      resyncInFlight = false;
+    }
+  }
+
+  bridge.onUpdate((payload) => {
+    const { state, seq } = payload as Snapshot<S>;
+
+    // Already seen, or arrived out of order behind something newer.
+    if (seq <= lastSeq) return;
+
+    // A hole: at least one change never reached this window. Applying this
+    // update would leave the mirror describing a history that never happened.
+    if (seq !== lastSeq + 1) {
+      void resync();
+      return;
+    }
+
+    lastSeq = seq;
+    mirror = state;
+    notify();
   });
 
   return {
