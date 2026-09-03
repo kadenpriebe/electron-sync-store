@@ -1,4 +1,11 @@
-import type { Listener, Reducer, Store, Unsubscribe } from "../core/store";
+import {
+  createNotifier,
+  type Listener,
+  type Reducer,
+  type Selector,
+  type Store,
+  type Unsubscribe,
+} from "../core/store";
 import type {
   DispatchEnvelope,
   DispatchReply,
@@ -95,18 +102,10 @@ export function createRendererStore<S, A>(
 
   trace({ kind: "bootstrap-applied", seq: lastSeq, state: confirmed });
 
-  const listeners = new Set<Listener<S>>();
-
-  /**
-   * A listener that throws must not poison the store or the dispatch
-   * promise. The error is re-thrown on its own microtask, so it still
-   * surfaces as an uncaught error where the host can see it.
-   */
-  function rethrowLater(error: unknown): void {
-    queueMicrotask(() => {
-      throw error;
-    });
-  }
+  // The same batching and slice-watching the main store uses. A listener that
+  // throws is caught there and re-thrown on its own microtask, so one bad
+  // subscriber cannot poison the mirror or a dispatch's promise.
+  const notifier = createNotifier<S>();
 
   /**
    * Recompute what the page sees and tell it. A guess the local reducer
@@ -124,13 +123,7 @@ export function createRendererStore<S, A>(
     }
     visible = state;
     trace({ kind: "mirror-changed", state: visible, pending: pending.length });
-    for (const listener of [...listeners]) {
-      try {
-        listener(visible);
-      } catch (error) {
-        rethrowLater(error);
-      }
-    }
+    notifier.changed(visible);
   }
 
   /** Drop every guess the confirmed state now includes. True if any went. */
@@ -147,10 +140,12 @@ export function createRendererStore<S, A>(
   }
 
   /** The confirmed state moved; take the news, then re-derive the picture. */
-  function advance(snapshot: Snapshot<S>, origin?: Origin): void {
+  function advance(snapshot: Snapshot<S>, origins?: Origin[]): void {
     lastSeq = snapshot.seq;
     confirmed = snapshot.state;
-    if (origin && origin.client === client) {
+    // One message can answer several proposals, including other windows'.
+    for (const origin of origins ?? []) {
+      if (origin.client !== client) continue;
       const mine = pending.find((guess) => guess.n === origin.n);
       if (mine) mine.confirmedAt = snapshot.seq;
     }
@@ -181,24 +176,27 @@ export function createRendererStore<S, A>(
 
   bridge.onUpdate((payload) => {
     const update = payload as Update<S>;
-    const { seq, origin } = update;
+    const { seq, since, origins } = update;
 
     // Already seen, or arrived out of order behind something newer.
     if (seq <= lastSeq) {
-      trace({ kind: "update-received", seq, origin, verdict: "stale" });
+      trace({ kind: "update-received", seq, since, origins, verdict: "stale" });
       return;
     }
 
-    // A hole: at least one change never reached this window. Applying this
-    // update would leave the mirror describing a history that never happened.
-    if (seq !== lastSeq + 1) {
-      trace({ kind: "update-received", seq, origin, verdict: "gap" });
+    // Does this message start where this mirror's history ends? An update
+    // covers everything after `since`, so one change and a batch of ten are
+    // the same test. If it starts anywhere else, something never arrived and
+    // applying it would leave the mirror describing a history that never
+    // happened.
+    if (since !== lastSeq) {
+      trace({ kind: "update-received", seq, since, origins, verdict: "gap" });
       void resync();
       return;
     }
 
-    trace({ kind: "update-received", seq, origin, verdict: "applied" });
-    advance(update, origin);
+    trace({ kind: "update-received", seq, since, origins, verdict: "applied" });
+    advance(update, origins);
   });
 
   /** Main has ruled on a guess. */
@@ -217,6 +215,16 @@ export function createRendererStore<S, A>(
     trace({ kind: "dispatch-confirmed", origin, seq: reply.seq });
     if (prune()) rebase();
     return reply;
+  }
+
+  function subscribe(listener: Listener<S>): Unsubscribe;
+  function subscribe<T>(selector: Selector<S, T>, listener: (slice: T) => void): Unsubscribe;
+  function subscribe<T>(
+    first: Listener<S> | Selector<S, T>,
+    second?: (slice: T) => void,
+  ): Unsubscribe {
+    if (second) return notifier.add(first as Selector<S, T>, second, visible);
+    return notifier.add((state: S) => state, first as Listener<S>, visible);
   }
 
   return {
@@ -251,11 +259,6 @@ export function createRendererStore<S, A>(
       );
     },
 
-    subscribe(listener: Listener<S>): Unsubscribe {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
-    },
+    subscribe,
   };
 }

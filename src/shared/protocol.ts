@@ -67,9 +67,22 @@ export type DispatchReply =
   | { status: "confirmed"; seq: number }
   | { status: "rejected"; reason: string };
 
-/** A broadcast. `origin` is present when a renderer's proposal caused it. */
+/**
+ * A broadcast. One update can carry several changes at once: main coalesces
+ * everything applied in a single tick into one message.
+ *
+ * `since` is what keeps that honest. It names the last change this update
+ * builds on, so an update covers `(since, seq]`. A mirror holding exactly
+ * `since` can take it; a mirror holding anything else knows something never
+ * reached it and asks for a full copy instead. Without `since`, a batch that
+ * jumped from 7 to 12 would be indistinguishable from four lost messages.
+ *
+ * `origins` names every proposal this update answers, so each mirror can find
+ * its own guesses in a batch that also carries other windows' changes.
+ */
 export type Update<S> = Snapshot<S> & {
-  origin?: Origin;
+  since: number;
+  origins?: Origin[];
 };
 
 /**

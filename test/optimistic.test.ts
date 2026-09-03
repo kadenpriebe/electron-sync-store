@@ -48,13 +48,40 @@ describe("optimistic dispatch", () => {
   });
 
   it("shows the change once, never twice, between the broadcast and the reply", async () => {
-    const { main, store } = setup();
+    const { main, store, count } = setup();
     const seen: number[] = [];
-    store.subscribe((state) => seen.push(state.count));
+    // Watching the number itself, not the whole state: confirming a guess
+    // hands the mirror a new state object holding the same number, and a
+    // watcher of the number should not hear about that.
+    store.subscribe(
+      (state) => state.count,
+      (n) => seen.push(n),
+    );
     const reply = store.dispatch(inc);
+    expect(count()).toBe(1);
+    // The guess is on screen in its own tick, before main has said anything.
+    await settle();
+    expect(seen).toEqual([1]);
     main.answer();
     await reply;
-    expect(Math.max(...seen)).toBe(1);
+    await settle();
+    // Confirming a guess is not a second change. The page was told once.
+    expect(count()).toBe(1);
+    expect(seen).toEqual([1]);
+  });
+
+  it("one message can answer several guesses at once", async () => {
+    const { main, store, count } = setup();
+    const replies = [store.dispatch(inc), store.dispatch(inc), store.dispatch(inc)];
+    expect(count()).toBe(3);
+    expect(main.inFlight).toBe(3);
+    // Main applies all three in one tick and announces them in one message.
+    main.answerAll();
+    await Promise.all(replies);
+    expect(store.getState()).toEqual(main.state);
+    // Nothing is left pending: a later change is not replayed over stale guesses.
+    main.change(inc);
+    expect(count()).toBe(4);
   });
 
   it("rolls back to the confirmed state when main rejects, and says why", async () => {
@@ -157,12 +184,17 @@ describe("optimistic dispatch", () => {
     const reply = late.dispatch(inc);
     main.answer();
     await reply;
+    await settle();
     expect(late.getState().count).toBe(1);
     for (const release of held.splice(0)) release();
+    await settle();
     expect(late.getState().count).toBe(1);
+    // Every value either mirror ever showed was at least the guess: no dip.
+    expect(seen.length).toBeGreaterThan(0);
     expect(Math.min(...seen)).toBe(1);
     main.change(inc);
     for (const release of held.splice(0)) release();
+    await settle();
     expect(late.getState()).toEqual(main.state);
     expect(count()).toBe(2);
   });

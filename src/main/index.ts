@@ -37,37 +37,34 @@ export function createMainStore<S, A>(
 ): Store<S, A> {
   const trace: Trace<MainTraceEvent<S, A>> = options.trace ?? (() => {});
 
-  /**
-   * True once the reducer has returned for the dispatch in progress. A throw
-   * before that point is a rejection; a throw after it came from a listener
-   * and the change already happened.
-   */
-  let reduced = false;
+  /** How many changes have been applied, ever. Stamped on every message. */
+  let seq = 0;
 
   // The reducer is wrapped rather than the store, so the core store stays
-  // unaware that tracing exists.
+  // unaware that tracing exists — and so that `seq` moves at the moment the
+  // change is applied. It cannot move in the subscriber any more: listeners
+  // are batched onto a microtask, and the reply to a proposal has to name the
+  // change's number while the handler is still running.
   const tracedReducer: Reducer<S, A> = (state, action) => {
     const next = reducer(state, action);
-    reduced = true;
+    // An action the reducer answers with the state it was given changed
+    // nothing, so it gets no number and causes no broadcast.
+    if (!Object.is(next, state)) seq += 1;
     trace({ kind: "reducer-ran", action, before: state, after: next });
     return next;
   };
 
   const store = createStore(tracedReducer, initialState);
 
-  /** How many changes have been applied, ever. Stamped on every message. */
-  let seq = 0;
+  /** The last change already announced. Every broadcast covers `(sent, seq]`. */
+  let sent = 0;
 
   /**
-   * Set for one renderer's dispatch and consumed by the first broadcast it
-   * causes, so that broadcast can name it. Changes made by main-process code
-   * directly have no origin, and neither does a change a host listener makes
-   * in reaction to a renderer's dispatch: the origin is taken by the first
-   * broadcast and cleared before listeners run.
+   * Proposals applied since the last broadcast, so the next one can name them
+   * and each mirror can find its own guesses in it. Changes made by
+   * main-process code have no origin and appear in the same message unnamed.
    */
-  let dispatching: Origin | undefined;
-  /** The seq at which the dispatch in progress was applied. */
-  let appliedAt = 0;
+  let answering: Origin[] = [];
 
   /**
    * Every renderer that has bootstrapped. This, not the list of open windows,
@@ -122,40 +119,34 @@ export function createMainStore<S, A>(
     (event, envelope: DispatchEnvelope<A>): DispatchReply => {
       const { origin, action } = envelope;
       trace({ kind: "dispatch-received", from: event.sender.id, origin, action });
-      dispatching = origin;
-      reduced = false;
       try {
         store.dispatch(action);
-        return { status: "confirmed", seq: appliedAt };
       } catch (error) {
-        if (reduced) {
-          // A host listener threw after the change was applied and
-          // broadcast. That is the host's bug, not a rejection: surface it,
-          // but tell the proposer the truth.
-          queueMicrotask(() => {
-            throw error;
-          });
-          return { status: "confirmed", seq: appliedAt };
-        }
+        // Only the reducer can throw in here now. Listeners are called from a
+        // microtask, so a host listener's bug can no longer be mistaken for a
+        // rejection — it surfaces as its own uncaught error, where it belongs.
         const reason = error instanceof Error ? error.message : String(error);
         trace({ kind: "dispatch-rejected", from: event.sender.id, origin, reason });
         return { status: "rejected", reason };
-      } finally {
-        dispatching = undefined;
       }
+      // Answered while the handler is still on the stack, before the broadcast
+      // this change will ride in. The proposer learns the number its change
+      // landed at either way, whichever message reaches it first.
+      answering.push(origin);
+      return { status: "confirmed", seq };
     },
   );
 
-  // Fan out every change to every subscribed renderer.
+  // Fan out to every subscribed renderer. One message per tick, however many
+  // changes happened in it: the store batches its listeners, and this is one.
   store.subscribe((state) => {
-    seq += 1;
-    const origin = dispatching;
-    dispatching = undefined;
-    const payload: Update<S> = { state, seq };
-    if (origin) {
-      payload.origin = origin;
-      appliedAt = seq;
-    }
+    const since = sent;
+    const origins = answering.length > 0 ? answering : undefined;
+    answering = [];
+    sent = seq;
+
+    const payload: Update<S> = { state, seq, since };
+    if (origins) payload.origins = origins;
     const to: number[] = [];
 
     for (const target of subscribers) {
@@ -167,7 +158,7 @@ export function createMainStore<S, A>(
       to.push(target.id);
     }
 
-    trace({ kind: "broadcast", seq, origin: payload.origin, to });
+    trace({ kind: "broadcast", seq, since, origins, to });
   });
 
   return store;

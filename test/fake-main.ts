@@ -27,19 +27,23 @@ type InFlight<A> = {
 export function fakeMain<S, A>(reducer: Reducer<S, A>, initialState: S) {
   let state = initialState;
   let seq = 0;
+  /** The last change announced. A dropped broadcast still counts as sent. */
+  let sent = 0;
   let dropBroadcasts = 0;
   let rejectNextWith: string | undefined;
   const listeners = new Set<(update: unknown) => void>();
   const inbox: InFlight<A>[] = [];
 
-  function broadcast(origin?: Origin): void {
-    seq += 1;
+  /** Announce everything applied since the last broadcast, in one message. */
+  function broadcast(origins?: Origin[]): void {
+    const since = sent;
+    sent = seq;
     if (dropBroadcasts > 0) {
       dropBroadcasts -= 1;
       return;
     }
-    const update: Update<S> = { state, seq };
-    if (origin) update.origin = origin;
+    const update: Update<S> = { state, seq, since };
+    if (origins) update.origins = origins;
     for (const listener of listeners) listener(update);
   }
 
@@ -91,8 +95,27 @@ export function fakeMain<S, A>(reducer: Reducer<S, A>, initialState: S) {
         resolve({ status: "rejected", reason: (error as Error).message });
         return;
       }
-      broadcast(envelope.origin);
+      seq += 1;
+      broadcast([envelope.origin]);
       resolve({ status: "confirmed", seq });
+    },
+
+    /**
+     * Answer everything waiting, then announce it once — main under load, where
+     * a tick's worth of proposals all land before any listener runs.
+     */
+    answerAll(): void {
+      const replies: Array<{ resolve: (reply: DispatchReply) => void; at: number }> = [];
+      const origins: Origin[] = [];
+      while (inbox.length > 0) {
+        const { envelope, resolve } = take();
+        state = reducer(state, envelope.action);
+        seq += 1;
+        origins.push(envelope.origin);
+        replies.push({ resolve, at: seq });
+      }
+      broadcast(origins);
+      for (const { resolve, at } of replies) resolve({ status: "confirmed", seq: at });
     },
 
     /** Refuse the next proposal without running the reducer, as a rule only main knows would. */
@@ -108,6 +131,16 @@ export function fakeMain<S, A>(reducer: Reducer<S, A>, initialState: S) {
     /** A change made somewhere else: another window, or main-process code. */
     change(action: A): void {
       state = reducer(state, action);
+      seq += 1;
+      broadcast();
+    },
+
+    /** Several changes elsewhere in one tick: applied in order, announced once. */
+    batch(actions: A[]): void {
+      for (const action of actions) {
+        state = reducer(state, action);
+        seq += 1;
+      }
       broadcast();
     },
 

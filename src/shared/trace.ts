@@ -22,8 +22,11 @@ export type MainTraceEvent<S, A> =
   | { kind: "dispatch-rejected"; from: number; origin: Origin; reason: string }
   /** The reducer produced a new state. */
   | { kind: "reducer-ran"; action: A; before: S; after: S }
-  /** A new state was sent to every subscribed renderer. */
-  | { kind: "broadcast"; seq: number; origin?: Origin; to: number[] };
+  /**
+   * A new state was sent to every subscribed renderer, covering every change
+   * after `since` up to and including `seq`.
+   */
+  | { kind: "broadcast"; seq: number; since: number; origins?: Origin[]; to: number[] };
 
 export type RendererTraceEvent<S, A> =
   /** The mirror was populated from the preload's bootstrap snapshot. */
@@ -38,7 +41,8 @@ export type RendererTraceEvent<S, A> =
   | {
       kind: "update-received";
       seq: number;
-      origin?: Origin;
+      since: number;
+      origins?: Origin[];
       verdict: "applied" | "stale" | "gap";
     }
   /** A gap was detected and a full snapshot requested. */
