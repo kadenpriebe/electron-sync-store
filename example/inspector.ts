@@ -12,7 +12,7 @@ import type { Origin } from "../src/shared/protocol";
 import type { Feed, PaneLabel, Rect, Slots } from "./demo-protocol";
 import { topics, type Topic } from "./explanations";
 import type { InspectorBridge } from "./inspector-preload";
-import type { AppState } from "./state";
+import type { AppAction, AppState } from "./state";
 
 declare global {
   interface Window {
@@ -62,6 +62,25 @@ function brief(state: AppState | undefined): string {
   return state ? `count ${state.count} · user ${state.user}` : "—";
 }
 
+/** What an action asks for, in words rather than JSON. */
+function asks(action: AppAction): string {
+  switch (action.type) {
+    case "increment":
+      return "add 1";
+    case "decrement":
+      return "subtract 1";
+    case "set-user":
+      return `change the name to "${action.user}"`;
+  }
+}
+
+/** "A and B", "A", "nobody". */
+function list(names: string[]): string {
+  if (names.length === 0) return "nobody";
+  if (names.length === 1) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
 // ---------------------------------------------------------------------------
 // Log
 // ---------------------------------------------------------------------------
@@ -73,37 +92,39 @@ function describe(entry: Feed): string {
   const e = entry.event;
   switch (e.kind) {
     case "pane-created":
-      return `renderer ${e.label.toUpperCase()} = webContents ${e.id}`;
+      return `window ${e.label.toUpperCase()} opened · webContents ${e.id}`;
     case "reject-armed":
-      return e.armed ? "chaos switch armed: main will refuse the next proposal" : "chaos switch off";
+      return e.armed ? "armed: main will say no to the next ask" : "armed off: main will say yes again";
     case "bootstrap-served":
-      return `bootstrap → ${who(e.to)}  (seq ${e.seq})`;
+      return `gave ${who(e.to)} its first copy · seq ${e.seq}`;
     case "snapshot-served":
-      return `snapshot → ${who(e.to)}  (seq ${e.seq})`;
+      return `gave ${who(e.to)} a fresh copy · seq ${e.seq}`;
     case "dispatch-received":
-      return `dispatch ← ${whose(e.origin)}  ${JSON.stringify(e.action)}`;
+      return `${whose(e.origin)} asks to ${asks(e.action)}`;
     case "dispatch-rejected":
       return "from" in e
-        ? `refused ${whose(e.origin)}: ${e.reason} → reply to ${who(e.from)} only`
-        : `main refused #${e.origin.n}: ${e.reason} → rolled back`;
+        ? `said no to ${whose(e.origin)}: ${e.reason} · told ${who(e.from)} only`
+        : `main said no to #${e.origin.n}: ${e.reason} · guess undone`;
     case "dispatch-confirmed":
-      return `main confirmed #${e.origin.n} at seq ${e.seq}`;
+      return `main said yes to #${e.origin.n} · seq ${e.seq}`;
     case "mirror-changed":
-      return `page sees ${brief(e.state)}${e.pending ? ` · ${e.pending} pending` : ""}`;
+      return `page now shows ${brief(e.state)}${e.pending ? ` · ${e.pending} guess${e.pending === 1 ? "" : "es"} waiting` : ""}`;
     case "reducer-ran":
-      return `reducer ${e.action.type} → ${JSON.stringify(e.after)}`;
+      return `reducer ran ${asks(e.action)} → ${brief(e.after)}`;
     case "broadcast":
-      return `broadcast seq ${e.seq}${e.origin ? ` (${whose(e.origin)})` : ""} → ${e.to.map(who).join(", ") || "nobody"}`;
+      return `sent seq ${e.seq} to ${list(e.to.map(who))}${e.origin ? ` · answers ${whose(e.origin)}` : ""}`;
     case "bootstrap-applied":
-      return `mirror populated, seq ${e.seq}`;
+      return `first copy in place · seq ${e.seq}`;
     case "dispatch-sent":
-      return `guess #${e.origin.n} ${JSON.stringify(e.action)} applied, sent to main`;
+      return `applied ${asks(e.action)} as a guess · asked main (#${e.origin.n})`;
     case "update-received":
-      return `update seq ${e.seq}: ${e.verdict}${e.origin ? ` (${whose(e.origin)})` : ""}`;
+      return `seq ${e.seq} arrived · ${
+        e.verdict === "applied" ? "used it" : e.verdict === "stale" ? "older than mine, ignored" : "a number is missing"
+      }${e.origin ? ` · answers ${whose(e.origin)}` : ""}`;
     case "resync-started":
-      return "gap → asking main for a snapshot";
+      return "missed a message · asking main for a fresh copy";
     case "resync-finished":
-      return `snapshot seq ${e.seq}: ${e.applied ? "applied" : "discarded (stale)"}`;
+      return `fresh copy seq ${e.seq} · ${e.applied ? "used it" : "mine was newer, ignored"}`;
     default: {
       const exhaustive: never = e;
       return String(exhaustive);
