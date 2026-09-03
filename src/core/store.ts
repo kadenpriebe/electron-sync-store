@@ -49,6 +49,17 @@ type Entry<S> = {
   last: unknown;
 };
 
+/**
+ * When a flush happens. The default is a microtask, which is the right answer
+ * in a renderer: everything queued in the same tick coalesces and the flush
+ * still lands before the browser can paint.
+ *
+ * It is the wrong answer in the main process, where the work arrives as
+ * separate I/O callbacks rather than in one block — see the note on
+ * `createStore`'s options.
+ */
+export type Schedule = (run: () => void) => void;
+
 export interface Notifier<S> {
   /** Registers a watcher and seeds it with what it can already see. */
   add<T>(select: Selector<S, T>, notify: (slice: T) => void, current: S): Unsubscribe;
@@ -80,7 +91,7 @@ export interface Notifier<S> {
  * between a dispatch and the flush is never told about a change it was not
  * present for.
  */
-export function createNotifier<S>(): Notifier<S> {
+export function createNotifier<S>(schedule: Schedule = queueMicrotask): Notifier<S> {
   const entries = new Set<Entry<S>>();
   let scheduled = false;
   let latest: S;
@@ -125,7 +136,7 @@ export function createNotifier<S>(): Notifier<S> {
       dirty = true;
       if (scheduled) return;
       scheduled = true;
-      queueMicrotask(flush);
+      schedule(flush);
     },
 
     flush,
@@ -134,9 +145,28 @@ export function createNotifier<S>(): Notifier<S> {
 
 const identity = <S,>(state: S): S => state;
 
-export function createStore<S, A>(reducer: Reducer<S, A>, initialState: S): Store<S, A> {
+export type StoreOptions = {
+  /**
+   * When to tell the listeners. Defaults to a microtask.
+   *
+   * The main process overrides it, and the reason is the shape of its work.
+   * Fifty proposals from a window arrive as fifty separate IPC callbacks, each
+   * its own task, so a microtask flush runs between every one of them and
+   * batches nothing at all. `setImmediate` fires after the whole batch of
+   * pending I/O callbacks has been drained, which is exactly the moment
+   * "everything that arrived together" is finished. A renderer keeps the
+   * microtask, because there it must beat the paint.
+   */
+  schedule?: Schedule;
+};
+
+export function createStore<S, A>(
+  reducer: Reducer<S, A>,
+  initialState: S,
+  options: StoreOptions = {},
+): Store<S, A> {
   let state = initialState;
-  const notifier = createNotifier<S>();
+  const notifier = createNotifier<S>(options.schedule);
 
   function subscribe(listener: Listener<S>): Unsubscribe;
   function subscribe<T>(selector: Selector<S, T>, listener: (slice: T) => void): Unsubscribe;

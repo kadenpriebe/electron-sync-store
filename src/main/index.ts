@@ -54,7 +54,13 @@ export function createMainStore<S, A>(
     return next;
   };
 
-  const store = createStore(tracedReducer, initialState);
+  const store = createStore(tracedReducer, initialState, {
+    // See StoreOptions.schedule: main's changes arrive as separate I/O
+    // callbacks, and this is the first moment after a batch of them is done.
+    schedule: (run) => {
+      setImmediate(run);
+    },
+  });
 
   /** The last change already announced. Every broadcast covers `(sent, seq]`. */
   let sent = 0;
