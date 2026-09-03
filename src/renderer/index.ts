@@ -1,6 +1,7 @@
 import type { Listener, Store, Unsubscribe } from "../core/store";
 import type { SyncStoreBridge } from "../preload";
 import type { Snapshot } from "../shared/protocol";
+import type { RendererTraceEvent, Trace } from "../shared/trace";
 
 declare global {
   interface Window {
@@ -9,6 +10,11 @@ declare global {
     __electronSyncStore: SyncStoreBridge;
   }
 }
+
+export type RendererStoreOptions<S, A> = {
+  /** See shared/trace.ts. Called synchronously; keep it cheap. */
+  trace?: Trace<RendererTraceEvent<S, A>>;
+};
 
 /**
  * The mirror: a full local copy of main's state, kept current by broadcast.
@@ -22,14 +28,19 @@ declare global {
  * the first snapshot before this file runs, so there is nothing to await and
  * no window during which the state is unknown.
  */
-export function createRendererStore<S, A>(): Store<S, A> {
+export function createRendererStore<S, A>(
+  options: RendererStoreOptions<S, A> = {},
+): Store<S, A> {
   const bridge = window.__electronSyncStore;
+  const trace: Trace<RendererTraceEvent<S, A>> = options.trace ?? (() => {});
 
   const bootstrap = bridge.initialState as Snapshot<S>;
 
   let mirror = bootstrap.state;
   let lastSeq = bootstrap.seq;
   let resyncInFlight = false;
+
+  trace({ kind: "bootstrap-applied", seq: lastSeq, state: mirror });
 
   const listeners = new Set<Listener<S>>();
 
@@ -49,13 +60,16 @@ export function createRendererStore<S, A>(): Store<S, A> {
   async function resync(): Promise<void> {
     if (resyncInFlight) return;
     resyncInFlight = true;
+    trace({ kind: "resync-started" });
     try {
       const snapshot = (await bridge.snapshot()) as Snapshot<S>;
-      if (snapshot.seq > lastSeq) {
+      const applied = snapshot.seq > lastSeq;
+      if (applied) {
         lastSeq = snapshot.seq;
         mirror = snapshot.state;
         notify();
       }
+      trace({ kind: "resync-finished", seq: snapshot.seq, applied });
     } finally {
       resyncInFlight = false;
     }
@@ -65,15 +79,20 @@ export function createRendererStore<S, A>(): Store<S, A> {
     const { state, seq } = payload as Snapshot<S>;
 
     // Already seen, or arrived out of order behind something newer.
-    if (seq <= lastSeq) return;
+    if (seq <= lastSeq) {
+      trace({ kind: "update-received", seq, verdict: "stale" });
+      return;
+    }
 
     // A hole: at least one change never reached this window. Applying this
     // update would leave the mirror describing a history that never happened.
     if (seq !== lastSeq + 1) {
+      trace({ kind: "update-received", seq, verdict: "gap" });
       void resync();
       return;
     }
 
+    trace({ kind: "update-received", seq, verdict: "applied" });
     lastSeq = seq;
     mirror = state;
     notify();
@@ -85,6 +104,7 @@ export function createRendererStore<S, A>(): Store<S, A> {
     },
 
     dispatch(action: A): void {
+      trace({ kind: "dispatch-sent", action });
       bridge.dispatch(action);
     },
 

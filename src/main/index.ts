@@ -1,6 +1,12 @@
 import { ipcMain, type WebContents } from "electron";
 import { createStore, type Reducer, type Store } from "../core/store";
 import { CHANNELS, type Snapshot } from "../shared/protocol";
+import type { MainTraceEvent, Trace } from "../shared/trace";
+
+export type MainStoreOptions<S, A> = {
+  /** See shared/trace.ts. Called synchronously; keep it cheap. */
+  trace?: Trace<MainTraceEvent<S, A>>;
+};
 
 /**
  * Installs the store in the main process and wires it to IPC.
@@ -13,8 +19,19 @@ import { CHANNELS, type Snapshot } from "../shared/protocol";
 export function createMainStore<S, A>(
   reducer: Reducer<S, A>,
   initialState: S,
+  options: MainStoreOptions<S, A> = {},
 ): Store<S, A> {
-  const store = createStore(reducer, initialState);
+  const trace: Trace<MainTraceEvent<S, A>> = options.trace ?? (() => {});
+
+  // The reducer is wrapped rather than the store, so the core store stays
+  // unaware that tracing exists.
+  const tracedReducer: Reducer<S, A> = (state, action) => {
+    const next = reducer(state, action);
+    trace({ kind: "reducer-ran", action, before: state, after: next });
+    return next;
+  };
+
+  const store = createStore(tracedReducer, initialState);
 
   /** How many changes have been applied, ever. Stamped on every message. */
   let seq = 0;
@@ -50,15 +67,20 @@ export function createMainStore<S, A>(
   ipcMain.on(CHANNELS.snapshotSync, (event) => {
     subscribe(event.sender);
     event.returnValue = currentSnapshot();
+    trace({ kind: "bootstrap-served", to: event.sender.id, seq });
   });
 
   // Resync. Same data, asynchronously, for a mirror that is already running
   // and has discovered a hole in its history.
-  ipcMain.handle(CHANNELS.snapshot, () => currentSnapshot());
+  ipcMain.handle(CHANNELS.snapshot, (event) => {
+    trace({ kind: "snapshot-served", to: event.sender.id, seq });
+    return currentSnapshot();
+  });
 
   // Writes: fire-and-forget from the renderer's point of view, so dispatching
   // never blocks the UI waiting on the main process.
-  ipcMain.on(CHANNELS.dispatch, (_event, action: A) => {
+  ipcMain.on(CHANNELS.dispatch, (event, action: A) => {
+    trace({ kind: "dispatch-received", from: event.sender.id, action });
     store.dispatch(action);
   });
 
@@ -66,6 +88,7 @@ export function createMainStore<S, A>(
   store.subscribe((state) => {
     seq += 1;
     const payload: Snapshot<S> = { state, seq };
+    const to: number[] = [];
 
     for (const target of subscribers) {
       // A renderer can be torn down between this loop starting and reaching
@@ -73,7 +96,10 @@ export function createMainStore<S, A>(
       // webContents throws.
       if (target.isDestroyed()) continue;
       target.send(CHANNELS.update, payload);
+      to.push(target.id);
     }
+
+    trace({ kind: "broadcast", seq, to });
   });
 
   return store;

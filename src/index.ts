@@ -9,3 +9,4 @@
 
 export * from "./core/store";
 export * from "./shared/protocol";
+export * from "./shared/trace";
