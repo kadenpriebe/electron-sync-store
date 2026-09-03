@@ -1,6 +1,13 @@
 import { ipcMain, type WebContents } from "electron";
 import { createStore, type Reducer, type Store } from "../core/store";
-import { CHANNELS, type Snapshot } from "../shared/protocol";
+import {
+  CHANNELS,
+  type DispatchEnvelope,
+  type DispatchReply,
+  type Origin,
+  type Snapshot,
+  type Update,
+} from "../shared/protocol";
 import type { MainTraceEvent, Trace } from "../shared/trace";
 
 export type MainStoreOptions<S, A> = {
@@ -35,6 +42,13 @@ export function createMainStore<S, A>(
 
   /** How many changes have been applied, ever. Stamped on every message. */
   let seq = 0;
+
+  /**
+   * Set for the duration of one renderer's dispatch, so the broadcast that
+   * dispatch causes can name it. Changes made by main-process code directly
+   * have no origin.
+   */
+  let dispatching: Origin | undefined;
 
   /**
    * Every renderer that has bootstrapped. This, not the list of open windows,
@@ -77,17 +91,37 @@ export function createMainStore<S, A>(
     return currentSnapshot();
   });
 
-  // Writes: fire-and-forget from the renderer's point of view, so dispatching
-  // never blocks the UI waiting on the main process.
-  ipcMain.on(CHANNELS.dispatch, (event, action: A) => {
-    trace({ kind: "dispatch-received", from: event.sender.id, action });
-    store.dispatch(action);
-  });
+  // Writes. Request/response: every proposal gets a verdict, addressed to the
+  // proposer alone. The renderer has already applied the action as a guess,
+  // and this reply is what tells it whether the guess held. A reducer that
+  // throws is the rejection path — the state is untouched, nothing is
+  // broadcast, and the reason travels back. The reply is a value in both
+  // cases; the handler itself never throws, because an invoke that rejects
+  // arrives as a transport error and this is not one.
+  ipcMain.handle(
+    CHANNELS.dispatch,
+    (event, envelope: DispatchEnvelope<A>): DispatchReply => {
+      const { origin, action } = envelope;
+      trace({ kind: "dispatch-received", from: event.sender.id, origin, action });
+      dispatching = origin;
+      try {
+        store.dispatch(action);
+        return { status: "confirmed", seq };
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        trace({ kind: "dispatch-rejected", from: event.sender.id, origin, reason });
+        return { status: "rejected", reason };
+      } finally {
+        dispatching = undefined;
+      }
+    },
+  );
 
   // Fan out every change to every subscribed renderer.
   store.subscribe((state) => {
     seq += 1;
-    const payload: Snapshot<S> = { state, seq };
+    const payload: Update<S> = { state, seq };
+    if (dispatching) payload.origin = dispatching;
     const to: number[] = [];
 
     for (const target of subscribers) {
@@ -99,7 +133,7 @@ export function createMainStore<S, A>(
       to.push(target.id);
     }
 
-    trace({ kind: "broadcast", seq, to });
+    trace({ kind: "broadcast", seq, origin: payload.origin, to });
   });
 
   return store;

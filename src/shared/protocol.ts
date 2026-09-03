@@ -1,10 +1,11 @@
 /**
- * The wire protocol: the only names both processes agree on.
+ * The wire protocol: the only names and shapes both processes agree on.
  *
  * One file, imported by main, preload and renderer alike, so a channel name
- * can never drift out of sync between the two sides of the boundary. The
- * names are namespaced because these channels live in the host application's
- * global IPC namespace alongside whatever else it registers.
+ * or a message shape can never drift out of sync between the two sides of
+ * the boundary. The names are namespaced because these channels live in the
+ * host application's global IPC namespace alongside whatever else it
+ * registers.
  */
 
 export const CHANNELS = {
@@ -15,7 +16,10 @@ export const CHANNELS = {
   snapshotSync: "electron-sync-store:snapshot-sync",
   /** Renderer asks main for the current state. Request/response. */
   snapshot: "electron-sync-store:snapshot",
-  /** Renderer proposes a change. Fire and forget; main is the only writer. */
+  /**
+   * Renderer proposes a change. Request/response: main answers every
+   * proposal with a verdict, addressed to the proposer alone.
+   */
   dispatch: "electron-sync-store:dispatch",
   /** Main announces a new state to every renderer. */
   update: "electron-sync-store:update",
@@ -36,3 +40,54 @@ export type Snapshot<S> = {
   state: S;
   seq: number;
 };
+
+/**
+ * Names one proposal from one mirror: which mirror (`client`, chosen at
+ * random when the mirror is created) and which of its proposals (`n`, its own
+ * count). Main echoes it on the broadcast the proposal caused, so the mirror
+ * that guessed can tell its own change apart from everyone else's.
+ */
+export type Origin = {
+  client: string;
+  n: number;
+};
+
+/** What a renderer sends when it proposes a change. */
+export type DispatchEnvelope<A> = {
+  origin: Origin;
+  action: A;
+};
+
+/**
+ * Main's answer to one proposal. `confirmed` carries the seq at which the
+ * change was applied; `rejected` means the reducer threw, nothing changed,
+ * and no broadcast was sent.
+ */
+export type DispatchReply =
+  | { status: "confirmed"; seq: number }
+  | { status: "rejected"; reason: string };
+
+/** A broadcast. `origin` is present when a renderer's proposal caused it. */
+export type Update<S> = Snapshot<S> & {
+  origin?: Origin;
+};
+
+/**
+ * What the preload exposes to the page, and what the renderer store consumes.
+ *
+ * Typed loosely on purpose: the preload is generic over the application's
+ * state, so it cannot name S or A. The renderer store, which can, narrows
+ * every value at the point of use. Anything that implements this shape can
+ * stand in for the real bridge, which is how the store is tested without a
+ * renderer process.
+ */
+export interface SyncStoreBridge {
+  /** A Snapshot, fetched before the page existed. */
+  readonly initialState: unknown;
+  /** Resolves to a Snapshot. */
+  snapshot(): Promise<unknown>;
+  /** Takes a DispatchEnvelope; resolves to a DispatchReply. */
+  dispatch(envelope: unknown): Promise<unknown>;
+  /** Called with an Update on every broadcast. Returns an unsubscribe. */
+  onUpdate(callback: (update: unknown) => void): () => void;
+}
