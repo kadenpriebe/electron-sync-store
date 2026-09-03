@@ -94,37 +94,39 @@ function describe(entry: Feed): string {
     case "pane-created":
       return `window ${e.label.toUpperCase()} opened · webContents ${e.id}`;
     case "reject-armed":
-      return e.armed ? "armed: main will say no to the next ask" : "armed off: main will say yes again";
+      return e.armed
+        ? "armed: the owner will say no to the next ask"
+        : "off again: the owner will say yes";
     case "bootstrap-served":
-      return `gave ${who(e.to)} its first copy · seq ${e.seq}`;
+      return `gave ${who(e.to)} its first copy · change ${e.seq}`;
     case "snapshot-served":
-      return `gave ${who(e.to)} a fresh copy · seq ${e.seq}`;
+      return `gave ${who(e.to)} a fresh copy · change ${e.seq}`;
     case "dispatch-received":
       return `${whose(e.origin)} asks to ${asks(e.action)}`;
     case "dispatch-rejected":
       return "from" in e
-        ? `said no to ${whose(e.origin)}: ${e.reason} · told ${who(e.from)} only`
-        : `main said no to #${e.origin.n}: ${e.reason} · guess undone`;
+        ? `said no to ${whose(e.origin)}: ${e.reason} · told ${who(e.from)} alone`
+        : `the owner said no to my ask #${e.origin.n}: ${e.reason} · guess undone`;
     case "dispatch-confirmed":
-      return `main said yes to #${e.origin.n} · seq ${e.seq}`;
+      return `the owner said yes to my ask #${e.origin.n} · change ${e.seq}`;
     case "mirror-changed":
       return `page now shows ${brief(e.state)}${e.pending ? ` · ${e.pending} guess${e.pending === 1 ? "" : "es"} waiting` : ""}`;
     case "reducer-ran":
-      return `reducer ran ${asks(e.action)} → ${brief(e.after)}`;
+      return `the rules ran ${asks(e.action)} → ${brief(e.after)}`;
     case "broadcast":
-      return `sent seq ${e.seq} to ${list(e.to.map(who))}${e.origin ? ` · answers ${whose(e.origin)}` : ""}`;
+      return `sent change ${e.seq} to ${list(e.to.map(who))}${e.origin ? ` · answers ${whose(e.origin)}` : ""}`;
     case "bootstrap-applied":
-      return `first copy in place · seq ${e.seq}`;
+      return `first copy in place · change ${e.seq}`;
     case "dispatch-sent":
-      return `applied ${asks(e.action)} as a guess · asked main (#${e.origin.n})`;
+      return `applied ${asks(e.action)} as a guess · asked the owner (#${e.origin.n})`;
     case "update-received":
-      return `seq ${e.seq} arrived · ${
+      return `change ${e.seq} arrived · ${
         e.verdict === "applied" ? "used it" : e.verdict === "stale" ? "older than mine, ignored" : "a number is missing"
       }${e.origin ? ` · answers ${whose(e.origin)}` : ""}`;
     case "resync-started":
       return "missed a message · asking main for a fresh copy";
     case "resync-finished":
-      return `fresh copy seq ${e.seq} · ${e.applied ? "used it" : "mine was newer, ignored"}`;
+      return `fresh copy · change ${e.seq} · ${e.applied ? "used it" : "mine was newer, ignored"}`;
     default: {
       const exhaustive: never = e;
       return String(exhaustive);
@@ -144,7 +146,7 @@ function log(entry: Feed): void {
   const s = document.createElement("span");
   s.className = "s";
   s.textContent =
-    entry.side === "renderer" ? who(entry.from) : entry.side === "main" ? "main" : "·";
+    entry.side === "renderer" ? who(entry.from) : entry.side === "main" ? "owner" : "·";
 
   const d = document.createElement("span");
   d.className = "e";
@@ -192,6 +194,7 @@ type Pane = {
   pending: HTMLElement;
   verdict: HTMLElement;
   state: HTMLElement;
+  timing: HTMLElement;
   slot: HTMLElement;
 };
 
@@ -210,6 +213,7 @@ function pane(label: PaneLabel): Pane {
     pending: el(`${label}-pending`),
     verdict: el(`${label}-verdict`),
     state: el(`${label}-state`),
+    timing: el(`${label}-timing`),
     slot: el(`slot-${label}`),
   };
 }
@@ -259,12 +263,46 @@ function setMirrorState(p: Pane, state: AppState): void {
 function setPending(p: Pane, n: number): void {
   p.pending.textContent = String(n);
   p.stripPending.hidden = n === 0;
-  p.stripPending.textContent = n === 1 ? "1 guess pending" : `${n} guesses pending`;
+  p.stripPending.textContent =
+    n === 1 ? "1 guess not answered yet" : `${n} guesses not answered yet`;
 }
 
 function setVerdict(p: Pane, text: string, cls: string): void {
   p.verdict.textContent = text;
   p.verdict.className = cls;
+}
+
+// ---------------------------------------------------------------------------
+// How long the owner took
+// ---------------------------------------------------------------------------
+
+/**
+ * The demo's whole argument in two numbers: the page changed in 0 ms, and the
+ * owner's answer arrived some time later. Measured from the feed, not
+ * animated, so a pile of asks shows the real backlog.
+ */
+const asked = new Map<string, number>();
+const waitingEl = el("waiting");
+
+function askKey(origin: Origin): string {
+  return `${origin.client}#${origin.n}`;
+}
+
+function showWaiting(): void {
+  waitingEl.textContent = String(asked.size);
+}
+
+function nowAsking(origin: Origin, at: number): void {
+  asked.set(askKey(origin), at);
+  showWaiting();
+}
+
+function nowAnswered(p: Pane, origin: Origin, at: number, said: string): void {
+  const sentAt = asked.get(askKey(origin));
+  asked.delete(askKey(origin));
+  showWaiting();
+  if (sentAt === undefined) return;
+  p.timing.textContent = `on screen in 0 ms · ${said} ${Math.max(0, at - sentAt)} ms later`;
 }
 
 // ---------------------------------------------------------------------------
@@ -281,10 +319,13 @@ function center(node: HTMLElement): { x: number; y: number } {
 /**
  * Playback speed. Each event is shown one at a time, and a burst of clicks
  * would otherwise take seconds to catch up. When the backlog grows the
- * animation shortens, so the picture never falls far behind the log.
+ * animation shortens; past a point it is skipped altogether and the steps
+ * only apply their values, so a pile of fifty asks leaves the picture correct
+ * within a moment instead of a minute behind.
  */
 function tempo(): number {
   const backlog = queue.length;
+  if (backlog > 40) return 0;
   if (backlog > 12) return 0.15;
   if (backlog > 4) return 0.4;
   return 1;
@@ -292,10 +333,11 @@ function tempo(): number {
 
 /** Move a dot from one element to another. Resolves when it arrives. */
 function travel(from: HTMLElement, to: HTMLElement, color: "m" | "r" | "x"): Promise<void> {
+  const ms = Math.round(420 * tempo());
+  if (ms === 0) return Promise.resolve();
   return new Promise((resolve) => {
     const a = center(from);
     const b = center(to);
-    const ms = Math.round(420 * tempo());
     const dot = document.createElement("div");
     dot.className = `dot ${color}`;
     dot.style.transitionDuration = `${ms}ms`;
@@ -320,12 +362,14 @@ function travel(from: HTMLElement, to: HTMLElement, color: "m" | "r" | "x"): Pro
 }
 
 function flash(node: HTMLElement, cls: string, ms = 260): Promise<void> {
+  const held = Math.round(ms * tempo());
+  if (held === 0) return Promise.resolve();
   node.classList.add(cls);
   return new Promise((resolve) => {
     setTimeout(() => {
       node.classList.remove(cls);
       resolve();
-    }, Math.round(ms * tempo()));
+    }, held);
   });
 }
 
@@ -374,7 +418,7 @@ function handle(entry: Feed): void {
           await flash(at.handler("snapshotSync"), "flash-main");
           if (!p) return;
           await travel(at.handler("snapshotSync"), at.preload(p), "m");
-          p.boot.textContent = `booted · seq ${e.seq}`;
+          p.boot.textContent = `has change ${e.seq}`;
           await flash(at.preload(p), "flash-main", 200);
         });
         return;
@@ -435,16 +479,17 @@ function handle(entry: Feed): void {
       enqueue(async () => {
         setMirror(p, e.seq, e.state);
         setPending(p, 0);
-        setVerdict(p, "bootstrap", "");
+        setVerdict(p, "got its first copy", "");
         await flash(at.mirror(p), "flash-rend");
       });
       return;
     }
     case "dispatch-sent": {
       clientOf.set(e.origin.client, label);
+      nowAsking(e.origin, entry.at);
       enqueue(async () => {
         // The guess is already on the page by the time this event exists.
-        setVerdict(p, `guess #${e.origin.n} · waiting for main`, "verdict-guess");
+        setVerdict(p, "showed my guess · waiting for an answer", "verdict-guess");
         await flash(at.mirror(p), "flash-guess", 200);
         await flash(at.preload(p), "flash-rend", 150);
         await travel(at.preload(p), at.handler("dispatch"), "r");
@@ -452,17 +497,19 @@ function handle(entry: Feed): void {
       return;
     }
     case "dispatch-confirmed": {
+      nowAnswered(p, e.origin, entry.at, "the owner said yes");
       enqueue(async () => {
         // The addressed reply, from the handler back to the sender alone.
         await travel(at.handler("dispatch"), at.preload(p), "m");
-        setVerdict(p, `#${e.origin.n} confirmed · seq ${e.seq}`, "verdict-applied");
+        setVerdict(p, `the owner said yes · change ${e.seq}`, "verdict-applied");
         await flash(at.mirror(p), "flash-ok", 200);
       });
       return;
     }
     case "dispatch-rejected": {
+      nowAnswered(p, e.origin, entry.at, "the owner said no");
       enqueue(async () => {
-        setVerdict(p, `#${e.origin.n} refused · rolled back`, "verdict-rejected");
+        setVerdict(p, "the owner said no · guess undone", "verdict-rejected");
         await flash(at.mirror(p), "flash-bad", 500);
       });
       return;
@@ -476,7 +523,12 @@ function handle(entry: Feed): void {
     }
     case "update-received": {
       const mine = e.origin && clientOf.get(e.origin.client) === label;
-      const text = `seq ${e.seq} · ${e.verdict}${mine ? ` · own #${e.origin?.n}` : ""}`;
+      const text =
+        e.verdict === "applied"
+          ? `change ${e.seq}${mine ? ", my own" : ""} · now official`
+          : e.verdict === "stale"
+            ? `change ${e.seq} · older than mine, ignored`
+            : `change ${e.seq} · I missed one, asking for a fresh copy`;
       enqueue(async () => {
         setVerdict(p, text, `verdict-${e.verdict}`);
         // The state the page sees follows in its own "mirror-changed" event.
@@ -490,7 +542,7 @@ function handle(entry: Feed): void {
       return;
     }
     case "resync-finished": {
-      const text = `resync seq ${e.seq} · ${e.applied ? "applied" : "discarded"}`;
+      const text = `fresh copy · change ${e.seq} · ${e.applied ? "now official" : "mine was newer, ignored"}`;
       enqueue(async () => {
         setVerdict(p, text, e.applied ? "verdict-applied" : "verdict-stale");
         if (e.applied) setMirror(p, e.seq, undefined);
@@ -523,14 +575,6 @@ function updateSide(): void {
   logPanel.hidden = explaining || !detailed;
 }
 
-function section(title: string, ...children: (Node | string)[]): DocumentFragment {
-  const frag = document.createDocumentFragment();
-  const h = document.createElement("h3");
-  h.textContent = title;
-  frag.append(h, ...children);
-  return frag;
-}
-
 function paragraph(text: string, cls?: string): HTMLParagraphElement {
   const p = document.createElement("p");
   p.textContent = text;
@@ -546,6 +590,9 @@ function renderTopic(topic: Topic, tone: "main" | "rend" | ""): void {
   file.className = "file";
   file.textContent = topic.file;
 
+  const heading = document.createElement("h3");
+  heading.textContent = "What I actually do";
+
   const steps = document.createElement("ol");
   for (const step of topic.steps) {
     const li = document.createElement("li");
@@ -553,25 +600,7 @@ function renderTopic(topic: Topic, tone: "main" | "rend" | ""): void {
     steps.append(li);
   }
 
-  const terms = document.createElement("dl");
-  for (const [term, meaning] of topic.terms) {
-    const dt = document.createElement("dt");
-    dt.textContent = term;
-    const dd = document.createElement("dd");
-    dd.textContent = meaning;
-    terms.append(dt, dd);
-  }
-
-  explainBody.replaceChildren(
-    h2,
-    file,
-    paragraph(topic.who, "who"),
-    section("The picture", paragraph(topic.picture)),
-    section("What I actually do", steps),
-    section("Say it right", terms),
-    section("Why I am built this way", paragraph(topic.why)),
-    section("Watch for it", paragraph(topic.watch, "watch")),
-  );
+  explainBody.replaceChildren(h2, file, paragraph(topic.essence, "who"), heading, steps);
   explainBody.scrollTop = 0;
   explainPanel.className = `explain ${tone ? `${tone}-topic` : ""}`;
   explaining = true;
@@ -697,12 +726,15 @@ let rejectArmed = false;
 function showRejectArmed(armed: boolean): void {
   rejectArmed = armed;
   rejectButton.classList.toggle("armed", armed);
-  rejectButton.textContent = armed ? "reject next · armed" : "reject next";
+  rejectButton.textContent = armed ? "armed · the owner will say no" : "make the owner say no";
 }
 
 rejectButton.addEventListener("click", () => {
   inspector.rejectNext(!rejectArmed);
 });
+
+// 25 asks from each window, all at once. The owner answers them one at a time.
+el("rush").addEventListener("click", () => inspector.rush(25));
 
 for (const button of document.querySelectorAll<HTMLButtonElement>("[data-latency]")) {
   button.addEventListener("click", () => {

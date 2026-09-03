@@ -55,8 +55,20 @@ contextBridge.exposeInMainWorld(BRIDGE_KEY, slow);
  * from the library's own bridge so the library's surface stays what it is.
  */
 const demo = {
+  /**
+   * Stamped here rather than where main forwards it. Main is single threaded:
+   * while it is working through a pile of asks it cannot forward anything, so
+   * its own arrival time would say more about main's backlog than about when
+   * this actually happened.
+   */
   trace(event: unknown): void {
-    ipcRenderer.send(DEMO.trace, event);
+    ipcRenderer.send(DEMO.trace, { at: Date.now(), event });
+  },
+  /** The inspector's "50 clicks at once" button, relayed through main. */
+  onRush(callback: (each: number) => void): void {
+    ipcRenderer.on(DEMO.rush, (_event, each: number) => {
+      callback(each);
+    });
   },
 };
 

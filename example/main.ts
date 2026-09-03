@@ -55,7 +55,7 @@ app.whenReady().then(() => {
     },
   });
 
-  function feed(body: FeedBody): void {
+  function feed(body: FeedBody & { at?: number }): void {
     if (inspector.isDestroyed()) return;
     inspector.webContents.send(DEMO.feed, { at: Date.now(), ...body });
   }
@@ -75,10 +75,26 @@ app.whenReady().then(() => {
     feed({ side: "meta", event: { kind: "reject-armed", armed } });
   }
 
+  /**
+   * What one ask costs main. Real work here is a fraction of a millisecond,
+   * which hides the thing this demo is about: main is single threaded, so
+   * asks are answered one after another. Give it a pile and the last one
+   * waits for all the others. Twelve milliseconds is nothing for one click
+   * and half a second for fifty, which is exactly the shape of the problem
+   * optimistic updates exist to solve.
+   */
+  const WORK_PER_ASK_MS = 12;
+  const idle = new Int32Array(new SharedArrayBuffer(4));
+
+  function work(ms: number): void {
+    Atomics.wait(idle, 0, 0, ms);
+  }
+
   const guarded = (state: AppState, action: AppAction): AppState => {
+    work(WORK_PER_ASK_MS);
     if (rejectNext) {
       armReject(false);
-      throw new Error("refused by main (chaos switch)");
+      throw new Error("refused on purpose");
     }
     return reducer(state, action);
   };
@@ -93,8 +109,19 @@ app.whenReady().then(() => {
   // the sender's identity attached, so the inspector knows which pane spoke.
   ipcMain.on(
     DEMO.trace,
-    (event, traced: RendererTraceEvent<AppState, AppAction>) => {
-      feed({ side: "renderer", from: event.sender.id, event: traced });
+    (
+      event,
+      stamped: { at: number; event: RendererTraceEvent<AppState, AppAction> },
+    ) => {
+      // The renderer's own timestamp, not this moment: main may have been
+      // busy for a while before getting here, and that would be a lie about
+      // when the renderer did the thing.
+      feed({
+        side: "renderer",
+        from: event.sender.id,
+        event: stamped.event,
+        at: stamped.at,
+      });
     },
   );
 
@@ -172,6 +199,12 @@ app.whenReady().then(() => {
 
   ipcMain.on(DEMO.rejectNext, (_event, armed: boolean) => {
     armReject(armed);
+  });
+
+  ipcMain.on(DEMO.rush, (_event, each: number) => {
+    for (const pane of panes.values()) {
+      pane.webContents.send(DEMO.rush, each);
+    }
   });
 
   void inspector.loadFile(path.join(__dirname, "inspector.html"));

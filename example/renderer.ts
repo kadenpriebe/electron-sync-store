@@ -56,6 +56,12 @@ function start(): void {
     });
   }
 
+  // The demo's load button: a pile of asks arriving at once, exactly as if a
+  // real app were busy. Every one of them is an ordinary dispatch.
+  window.__demo.onRush((each) => {
+    for (let i = 0; i < each; i++) send({ type: "increment" });
+  });
+
   el("inc").addEventListener("click", () => send({ type: "increment" }));
   el("dec").addEventListener("click", () => send({ type: "decrement" }));
   userInput.addEventListener("input", () => send({ type: "set-user", user: userInput.value }));

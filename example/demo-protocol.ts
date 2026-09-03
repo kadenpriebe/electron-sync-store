@@ -26,6 +26,12 @@ export const DEMO = {
   latency: "demo:latency",
   /** inspector → main: refuse the next proposal, whatever it is. */
   rejectNext: "demo:reject-next",
+  /**
+   * inspector → main → both pages: dispatch a burst of actions right now.
+   * The point is to give main more asks than it can answer at once, so its
+   * answers visibly fall behind while the pages stay instant.
+   */
+  rush: "demo:rush",
 } as const;
 
 export type PaneLabel = "a" | "b";

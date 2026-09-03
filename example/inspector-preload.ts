@@ -22,6 +22,9 @@ const inspector = {
   rejectNext(armed: boolean): void {
     ipcRenderer.send(DEMO.rejectNext, armed);
   },
+  rush(each: number): void {
+    ipcRenderer.send(DEMO.rush, each);
+  },
   onFeed(callback: (entry: Feed) => void): void {
     ipcRenderer.on(DEMO.feed, (_event: IpcRendererEvent, entry: Feed) => {
       callback(entry);
