@@ -5,9 +5,9 @@
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
   "scripts": {
-    "build": "tsc && npm run build:preload && npm run build:renderer && cp example/index.html dist/example/",
-    "build:preload": "esbuild example/preload.ts --bundle --outfile=dist/example/preload.js --format=cjs --platform=node --external:electron",
-    "build:renderer": "esbuild example/renderer.ts --bundle --outfile=dist/example/renderer.js --format=iife --platform=browser",
+    "build": "tsc && npm run build:preload && npm run build:renderer && cp example/*.html dist/example/",
+    "build:preload": "esbuild example/preload.ts example/inspector-preload.ts --bundle --outdir=dist/example --format=cjs --platform=node --external:electron",
+    "build:renderer": "esbuild example/renderer.ts example/inspector.ts --bundle --outdir=dist/example --format=iife --platform=browser",
     "typecheck": "tsc --noEmit",
     "start": "npm run build && electron dist/example/main.js",
     "test": "echo \"Error: no test specified\" && exit 1"

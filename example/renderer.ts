@@ -1,5 +1,12 @@
 import { createRendererStore } from "../src/renderer";
+import type { DemoBridge } from "./preload";
 import type { AppAction, AppState } from "./state";
+
+declare global {
+  interface Window {
+    __demo: DemoBridge;
+  }
+}
 
 function el<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -8,7 +15,10 @@ function el<T extends HTMLElement>(id: string): T {
 }
 
 function start(): void {
-  const store = createRendererStore<AppState, AppAction>();
+  const store = createRendererStore<AppState, AppAction>({
+    // Report the mirror's decisions to the inspector. An app would omit this.
+    trace: (event) => window.__demo.trace(event),
+  });
 
   const count = el("count");
   const user = el("user");

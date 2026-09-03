@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+    />
+    <title>electron-sync-store — live architecture</title>
+    <style>
+      :root {
+        --bg: #0e1116;
+        --panel: #151a22;
+        --panel-2: #1b222c;
+        --line: #2a3340;
+        --text: #d9dee5;
+        --muted: #7f8a99;
+        --main: #f0a83a;
+        --main-dim: rgba(240, 168, 58, 0.16);
+        --rend: #5aa9ff;
+        --rend-dim: rgba(90, 169, 255, 0.16);
+        --ok: #3fb950;
+        --warn: #d29922;
+        --bad: #f85149;
+        --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+        --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 13px/1.4 var(--sans);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      header {
+        height: 48px;
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        padding: 0 16px;
+        border-bottom: 1px solid var(--line);
+        background: var(--panel);
+      }
+      .brand {
+        font-family: var(--mono);
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .brand span {
+        color: var(--muted);
+        font-weight: 400;
+        margin-left: 8px;
+      }
+      .legend {
+        display: flex;
+        gap: 14px;
+        color: var(--muted);
+        font-size: 12px;
+        margin-left: auto;
+      }
+      .legend i {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        vertical-align: -1px;
+        margin-right: 5px;
+      }
+      .legend .m {
+        background: var(--main);
+      }
+      .legend .r {
+        background: var(--rend);
+      }
+      .controls {
+        display: flex;
+        gap: 8px;
+      }
+      button {
+        font: 12px var(--sans);
+        color: var(--text);
+        background: var(--panel-2);
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        padding: 5px 10px;
+        cursor: pointer;
+      }
+      button:hover {
+        border-color: var(--muted);
+      }
+      button:focus-visible {
+        outline: 2px solid var(--rend);
+        outline-offset: 1px;
+      }
+
+      main {
+        flex: 1;
+        min-height: 0;
+        display: grid;
+        grid-template-columns: 1fr 360px;
+      }
+
+      /* ---------- diagram ---------- */
+      .diagram {
+        display: grid;
+        grid-template-rows: auto 34px 1fr;
+        gap: 10px;
+        padding: 14px;
+        min-height: 0;
+      }
+      .proc {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        padding: 10px 12px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-height: 0;
+      }
+      .proc.main {
+        border-color: rgba(240, 168, 58, 0.45);
+      }
+      .proc.rend {
+        border-color: rgba(90, 169, 255, 0.45);
+      }
+      .proc-title {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        font-size: 11px;
+      }
+      .proc.main .proc-title {
+        color: var(--main);
+      }
+      .proc.rend .proc-title {
+        color: var(--rend);
+      }
+      .proc-title .path {
+        font: 11px var(--mono);
+        color: var(--muted);
+        letter-spacing: 0;
+        font-weight: 400;
+      }
+      .main-grid {
+        display: grid;
+        grid-template-columns: 1.1fr 1fr 1.2fr;
+        gap: 10px;
+      }
+      .box {
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--panel-2);
+        padding: 8px 10px;
+        min-width: 0;
+        transition: box-shadow 0.15s;
+      }
+      .box-title {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text);
+        margin-bottom: 6px;
+      }
+      .box-title span {
+        font: 10.5px var(--mono);
+        color: var(--muted);
+        margin-left: 6px;
+        font-weight: 400;
+      }
+      .kv {
+        display: flex;
+        justify-content: space-between;
+        font-family: var(--mono);
+        font-size: 12px;
+        padding: 2px 0;
+      }
+      .kv span {
+        color: var(--muted);
+      }
+      .kv b {
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+      pre {
+        margin: 6px 0 0;
+        font: 11.5px/1.45 var(--mono);
+        color: var(--text);
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+      .muted {
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 11.5px;
+      }
+      .chip {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 8px;
+        font: 12px var(--mono);
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        padding: 5px 8px;
+        margin-top: 5px;
+        background: var(--panel);
+        transition: background 0.15s, border-color 0.15s;
+      }
+      .chip:first-of-type {
+        margin-top: 0;
+      }
+      .chip em {
+        font-style: normal;
+        color: var(--muted);
+        font-size: 10.5px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .flash-main {
+        background: var(--main-dim) !important;
+        border-color: var(--main) !important;
+        box-shadow: 0 0 0 2px var(--main-dim);
+      }
+      .flash-rend {
+        background: var(--rend-dim) !important;
+        border-color: var(--rend) !important;
+        box-shadow: 0 0 0 2px var(--rend-dim);
+      }
+      .flash-ok {
+        border-color: var(--ok) !important;
+        box-shadow: 0 0 0 2px rgba(63, 185, 80, 0.25);
+      }
+      .flash-bad {
+        border-color: var(--bad) !important;
+        box-shadow: 0 0 0 2px rgba(248, 81, 73, 0.25);
+      }
+
+      .boundary {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: var(--muted);
+        font: 11px var(--mono);
+        letter-spacing: 0.04em;
+      }
+      .boundary::before,
+      .boundary::after {
+        content: "";
+        flex: 1;
+        border-top: 1px dashed var(--line);
+      }
+
+      .renderers {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        min-height: 0;
+      }
+      .rend-row {
+        display: grid;
+        grid-template-columns: 1fr 1.4fr;
+        gap: 10px;
+      }
+      .slot-wrap {
+        flex: 1;
+        min-height: 200px;
+        display: flex;
+        flex-direction: column;
+      }
+      .slot {
+        flex: 1;
+        border: 1px dashed var(--line);
+        border-radius: 6px;
+        background: repeating-linear-gradient(
+          45deg,
+          transparent 0 8px,
+          rgba(255, 255, 255, 0.02) 8px 16px
+        );
+      }
+      .verdict-applied {
+        color: var(--ok);
+      }
+      .verdict-stale {
+        color: var(--warn);
+      }
+      .verdict-gap {
+        color: var(--bad);
+      }
+
+      /* ---------- log ---------- */
+      .log {
+        border-left: 1px solid var(--line);
+        background: var(--panel);
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+      .log-title {
+        flex: none;
+        padding: 10px 12px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        justify-content: space-between;
+      }
+      .log-title span {
+        color: var(--muted);
+        font-weight: 400;
+        letter-spacing: 0;
+        font-family: var(--mono);
+      }
+      ol {
+        list-style: none;
+        margin: 0;
+        padding: 6px 0;
+        overflow-y: auto;
+        flex: 1;
+        font: 11.5px/1.5 var(--mono);
+      }
+      li {
+        display: grid;
+        grid-template-columns: 62px 44px 1fr;
+        gap: 8px;
+        padding: 1px 12px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      li .t {
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+      }
+      li .s {
+        font-weight: 600;
+      }
+      li.main .s {
+        color: var(--main);
+      }
+      li.renderer .s {
+        color: var(--rend);
+      }
+      li.meta .s {
+        color: var(--muted);
+      }
+      li .e {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      /* ---------- wires ---------- */
+      #wires {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 40;
+      }
+      .dot {
+        position: absolute;
+        width: 11px;
+        height: 11px;
+        margin: -5.5px 0 0 -5.5px;
+        border-radius: 50%;
+        transition: transform 0.42s cubic-bezier(0.3, 0, 0.2, 1);
+        box-shadow: 0 0 10px currentColor;
+      }
+      .dot.m {
+        background: var(--main);
+        color: var(--main);
+      }
+      .dot.r {
+        background: var(--rend);
+        color: var(--rend);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .dot {
+          transition-duration: 0.01s;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand">electron-sync-store <span>live architecture</span></div>
+      <div class="legend">
+        <span><i class="m"></i>main process</span>
+        <span><i class="r"></i>renderer process</span>
+        <span>· dots are IPC messages, slowed for the eye; real times in the log</span>
+      </div>
+      <div class="controls">
+        <button data-reload="a">reload renderer A</button>
+        <button data-reload="b">reload renderer B</button>
+        <button id="clear">clear log</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="diagram">
+        <div class="proc main">
+          <div class="proc-title">
+            MAIN PROCESS <span class="path">Node · src/main/index.ts</span>
+          </div>
+          <div class="main-grid">
+            <div class="box" id="box-store">
+              <div class="box-title">store <span>src/core/store.ts</span></div>
+              <div class="kv"><span>seq</span><b id="main-seq">0</b></div>
+              <div class="kv"><span>subscribers</span><b id="main-subs">0</b></div>
+              <pre id="main-state">—</pre>
+            </div>
+            <div class="box" id="box-reducer">
+              <div class="box-title">reducer <span>example/state.ts</span></div>
+              <div class="muted" id="reducer-last">idle</div>
+            </div>
+            <div class="box">
+              <div class="box-title">IPC handlers <span>ipcMain</span></div>
+              <div class="chip" id="h-snapshot-sync">
+                snapshot-sync <em>on · event.returnValue</em>
+              </div>
+              <div class="chip" id="h-snapshot">
+                snapshot <em>handle · resync</em>
+              </div>
+              <div class="chip" id="h-dispatch">dispatch <em>on · fire-and-forget</em></div>
+              <div class="chip" id="h-broadcast">
+                update <em>webContents.send · to all</em>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="boundary">
+          process boundary · IPC · every message is copied (structured clone), never shared
+        </div>
+
+        <div class="renderers">
+          <div class="proc rend">
+            <div class="proc-title">
+              RENDERER A <span class="path" id="a-id">webContents —</span>
+            </div>
+            <div class="rend-row">
+              <div class="box">
+                <div class="box-title">preload <span>src/preload/index.ts</span></div>
+                <div class="chip" id="a-preload">bridge <em id="a-boot">not booted</em></div>
+              </div>
+              <div class="box" id="a-mirror">
+                <div class="box-title">mirror <span>src/renderer/index.ts</span></div>
+                <div class="kv"><span>lastSeq</span><b id="a-seq">—</b></div>
+                <div class="kv"><span>last update</span><b id="a-verdict">—</b></div>
+                <pre id="a-state">—</pre>
+              </div>
+            </div>
+            <div class="slot-wrap">
+              <div class="box-title">
+                page <span>example/index.html · a real WebContentsView</span>
+              </div>
+              <div class="slot" id="slot-a"></div>
+            </div>
+          </div>
+
+          <div class="proc rend">
+            <div class="proc-title">
+              RENDERER B <span class="path" id="b-id">webContents —</span>
+            </div>
+            <div class="rend-row">
+              <div class="box">
+                <div class="box-title">preload <span>src/preload/index.ts</span></div>
+                <div class="chip" id="b-preload">bridge <em id="b-boot">not booted</em></div>
+              </div>
+              <div class="box" id="b-mirror">
+                <div class="box-title">mirror <span>src/renderer/index.ts</span></div>
+                <div class="kv"><span>lastSeq</span><b id="b-seq">—</b></div>
+                <div class="kv"><span>last update</span><b id="b-verdict">—</b></div>
+                <pre id="b-state">—</pre>
+              </div>
+            </div>
+            <div class="slot-wrap">
+              <div class="box-title">
+                page <span>example/index.html · a real WebContentsView</span>
+              </div>
+              <div class="slot" id="slot-b"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="log">
+        <div class="log-title">EVENT LOG <span id="log-count">0</span></div>
+        <ol id="log"></ol>
+      </aside>
+    </main>
+
+    <div id="wires"></div>
+    <script src="inspector.js"></script>
+  </body>
+</html>
