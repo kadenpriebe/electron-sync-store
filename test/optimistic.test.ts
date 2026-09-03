@@ -114,6 +114,71 @@ describe("optimistic dispatch", () => {
     expect(count()).toBe(0);
   });
 
+  it("the dispatch promise never rejects, even when a subscriber throws", async () => {
+    const { main, store, count } = setup();
+    store.subscribe(() => {
+      throw new Error("listener blew up");
+    });
+    // The store's own guard re-throws on a microtask; keep that from failing the test.
+    const swallow = (): void => {};
+    process.on("uncaughtException", swallow);
+    try {
+      main.rejectNext("no");
+      const reply = store.dispatch(inc);
+      main.answer();
+      await expect(reply).resolves.toEqual({ status: "rejected", reason: "no" });
+      expect(count()).toBe(0);
+      await settle();
+    } finally {
+      process.off("uncaughtException", swallow);
+    }
+  });
+
+  it("a guess is not stranded by a bridge that throws synchronously", async () => {
+    const { main, store, count } = setup();
+    const broken = { ...main.bridge, dispatch: () => { throw new Error("cannot send"); } };
+    const strict = createRendererStore(reducer, { bridge: broken });
+    const reply = strict.dispatch(inc);
+    await expect(reply).resolves.toEqual({ status: "rejected", reason: "cannot send" });
+    expect(strict.getState().count).toBe(0);
+    expect(count()).toBe(0);
+  });
+
+  it("when the reply overtakes the broadcast, the count never dips", async () => {
+    const { main, store, count } = setup();
+    const seen: number[] = [];
+    store.subscribe((state) => seen.push(state.count));
+    // Hold every broadcast until the test releases it.
+    const held: Array<() => void> = [];
+    const onUpdate = main.bridge.onUpdate;
+    main.bridge.onUpdate = (callback) => onUpdate((update) => { held.push(() => callback(update)); });
+    const late = createRendererStore(reducer, { bridge: main.bridge });
+    late.subscribe((state) => seen.push(state.count));
+    const reply = late.dispatch(inc);
+    main.answer();
+    await reply;
+    expect(late.getState().count).toBe(1);
+    for (const release of held.splice(0)) release();
+    expect(late.getState().count).toBe(1);
+    expect(Math.min(...seen)).toBe(1);
+    main.change(inc);
+    for (const release of held.splice(0)) release();
+    expect(late.getState()).toEqual(main.state);
+    expect(count()).toBe(2);
+  });
+
+  it("a rejection keeps a change from another window that arrived mid-flight", async () => {
+    const { main, store, count } = setup();
+    main.rejectNext("no");
+    const reply = store.dispatch(inc);
+    main.change(inc);
+    expect(count()).toBe(2);
+    main.answer();
+    await reply;
+    expect(count()).toBe(1);
+    expect(store.getState()).toEqual(main.state);
+  });
+
   it("a guess confirmed during a missed broadcast is cleared by the resync", async () => {
     const { main, store, count } = setup();
     const reply = store.dispatch(inc);

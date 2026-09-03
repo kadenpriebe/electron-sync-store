@@ -98,6 +98,17 @@ export function createRendererStore<S, A>(
   const listeners = new Set<Listener<S>>();
 
   /**
+   * A listener that throws must not poison the store or the dispatch
+   * promise. The error is re-thrown on its own microtask, so it still
+   * surfaces as an uncaught error where the host can see it.
+   */
+  function rethrowLater(error: unknown): void {
+    queueMicrotask(() => {
+      throw error;
+    });
+  }
+
+  /**
    * Recompute what the page sees and tell it. A guess the local reducer
    * throws on is skipped here but was still sent: main's reducer is the
    * authority, and it may accept what this copy of the reducer refused.
@@ -114,7 +125,11 @@ export function createRendererStore<S, A>(
     visible = state;
     trace({ kind: "mirror-changed", state: visible, pending: pending.length });
     for (const listener of [...listeners]) {
-      listener(visible);
+      try {
+        listener(visible);
+      } catch (error) {
+        rethrowLater(error);
+      }
     }
   }
 
@@ -218,7 +233,15 @@ export function createRendererStore<S, A>(
       trace({ kind: "dispatch-sent", origin, action });
 
       const envelope: DispatchEnvelope<A> = { origin, action };
-      return bridge.dispatch(envelope).then(
+      // A bridge that throws synchronously (the real one cannot; a custom
+      // one might) is treated exactly like one whose promise rejected.
+      let sent: Promise<unknown>;
+      try {
+        sent = bridge.dispatch(envelope);
+      } catch (error) {
+        sent = Promise.reject(error);
+      }
+      return sent.then(
         (reply) => settle(guess, origin, reply as DispatchReply),
         (error: unknown) =>
           settle(guess, origin, {

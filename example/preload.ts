@@ -29,9 +29,12 @@ function later<T>(produce: () => T | Promise<T>): Promise<T> {
 
 /**
  * Same shape, every crossing delayed. Delays are equal in both directions,
- * and timers fire in order, so the relative order of messages is preserved
- * exactly as the real transport preserves it. The bootstrap is untouched:
- * it happened before the page existed and there is nothing to slow down.
+ * and timers fire in order, so while the setting is constant the relative
+ * order of messages is exactly what the real transport gives. Changing the
+ * setting while messages are in flight can reorder them (a 1.5 s timer
+ * already running against a new 0 ms one); the mirror treats that like any
+ * other gap and resyncs. The bootstrap is untouched: it happened before the
+ * page existed and there is nothing to slow down.
  */
 const slow: SyncStoreBridge = {
   initialState: real.initialState,

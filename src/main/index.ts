@@ -30,10 +30,18 @@ export function createMainStore<S, A>(
 ): Store<S, A> {
   const trace: Trace<MainTraceEvent<S, A>> = options.trace ?? (() => {});
 
+  /**
+   * True once the reducer has returned for the dispatch in progress. A throw
+   * before that point is a rejection; a throw after it came from a listener
+   * and the change already happened.
+   */
+  let reduced = false;
+
   // The reducer is wrapped rather than the store, so the core store stays
   // unaware that tracing exists.
   const tracedReducer: Reducer<S, A> = (state, action) => {
     const next = reducer(state, action);
+    reduced = true;
     trace({ kind: "reducer-ran", action, before: state, after: next });
     return next;
   };
@@ -44,11 +52,15 @@ export function createMainStore<S, A>(
   let seq = 0;
 
   /**
-   * Set for the duration of one renderer's dispatch, so the broadcast that
-   * dispatch causes can name it. Changes made by main-process code directly
-   * have no origin.
+   * Set for one renderer's dispatch and consumed by the first broadcast it
+   * causes, so that broadcast can name it. Changes made by main-process code
+   * directly have no origin, and neither does a change a host listener makes
+   * in reaction to a renderer's dispatch: the origin is taken by the first
+   * broadcast and cleared before listeners run.
    */
   let dispatching: Origin | undefined;
+  /** The seq at which the dispatch in progress was applied. */
+  let appliedAt = 0;
 
   /**
    * Every renderer that has bootstrapped. This, not the list of open windows,
@@ -104,10 +116,20 @@ export function createMainStore<S, A>(
       const { origin, action } = envelope;
       trace({ kind: "dispatch-received", from: event.sender.id, origin, action });
       dispatching = origin;
+      reduced = false;
       try {
         store.dispatch(action);
-        return { status: "confirmed", seq };
+        return { status: "confirmed", seq: appliedAt };
       } catch (error) {
+        if (reduced) {
+          // A host listener threw after the change was applied and
+          // broadcast. That is the host's bug, not a rejection: surface it,
+          // but tell the proposer the truth.
+          queueMicrotask(() => {
+            throw error;
+          });
+          return { status: "confirmed", seq: appliedAt };
+        }
         const reason = error instanceof Error ? error.message : String(error);
         trace({ kind: "dispatch-rejected", from: event.sender.id, origin, reason });
         return { status: "rejected", reason };
@@ -120,8 +142,13 @@ export function createMainStore<S, A>(
   // Fan out every change to every subscribed renderer.
   store.subscribe((state) => {
     seq += 1;
+    const origin = dispatching;
+    dispatching = undefined;
     const payload: Update<S> = { state, seq };
-    if (dispatching) payload.origin = dispatching;
+    if (origin) {
+      payload.origin = origin;
+      appliedAt = seq;
+    }
     const to: number[] = [];
 
     for (const target of subscribers) {
