@@ -597,6 +597,12 @@
       <div class="group" title="give the owner more asks than it can answer at once">
         <button id="rush">50 clicks at once</button>
         <span class="waiting">waiting <b id="waiting">0</b></span>
+        <span class="waiting">asks <b id="asks">0</b></span>
+        <span
+          class="waiting"
+          title="everything the owner changes in one go leaves in one message, so fifty asks are answered by a handful"
+          >sent out <b id="sent-out">0</b></span
+        >
       </div>
       <div class="group" title="how long each message takes to travel">
         <span>speed</span>
@@ -628,6 +634,7 @@
                 where the state sits <span>store · src/core/store.ts</span>
               </div>
               <div class="kv"><span>changes so far</span><b id="main-seq">0</b></div>
+              <div class="kv"><span>messages sent out</span><b id="main-sent">0</b></div>
               <div class="kv"><span>windows kept updated</span><b id="main-subs">0</b></div>
               <pre id="main-state">—</pre>
             </div>
@@ -762,12 +769,19 @@ the wall between them · everything that crosses is a copy, never the original
             <p>
               Then press <b>50 clicks at once</b>. The owner answers one ask at a
               time, so its answers fall behind — and the numbers on the pages
-              never slow down at all. That is what the guessing is for.
+              never slow down at all. That is what the guessing is for. Watch
+              <b>sent out</b> while you do: fifty asks, a handful of messages
+              back, because everything the owner changes in one go is announced
+              in one go.
             </p>
             <div class="actions">
               <button class="primary" data-topic="guessing">
                 why the windows guess
                 <small>the reason this library exists</small>
+              </button>
+              <button data-topic="batching">
+                why fifty asks make three messages
+                <small>and how a window still knows it missed nothing</small>
               </button>
               <button data-topic="overview">
                 what is this, in more words

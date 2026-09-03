@@ -63,6 +63,16 @@
         border-radius: 6px;
         margin-top: 0.35rem;
       }
+      /* Each watcher only wakes for its own piece of the state. */
+      .draws {
+        margin-top: 1.5rem;
+        font-size: 0.8rem;
+        color: #6b6b6b;
+      }
+      .draws b {
+        font-variant-numeric: tabular-nums;
+        color: #1a1a1a;
+      }
     </style>
   </head>
   <body>
@@ -73,9 +83,14 @@
     <button id="inc">+</button>
     <p class="note" id="note"></p>
 
-    <label for="user-input">user</label>
+    <label for="user-input">name</label>
     <input id="user-input" type="text" />
-    <p>state.user is <strong id="user">—</strong></p>
+    <p>the name is <strong id="user">—</strong></p>
+
+    <p class="draws">
+      count redraws <b id="count-draws">0</b> · name redraws
+      <b id="name-draws">0</b>
+    </p>
 
     <script src="renderer.js"></script>
   </body>

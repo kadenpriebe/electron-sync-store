@@ -26,20 +26,49 @@ function start(): void {
   const user = el("user");
   const userInput = el<HTMLInputElement>("user-input");
   const note = el("note");
+  const countDraws = el("count-draws");
+  const nameDraws = el("name-draws");
 
-  function render(state: AppState): void {
-    count.textContent = String(state.count);
-    user.textContent = state.user;
+  function drawCount(value: number): void {
+    count.textContent = String(value);
+  }
+
+  function drawName(value: string): void {
+    user.textContent = value;
     if (document.activeElement !== userInput) {
-      userInput.value = state.user;
+      userInput.value = value;
     }
   }
 
   // A synchronous read on the first line of app code. No await anywhere in
   // this file, and no loading state — the value is already local.
-  render(store.getState());
+  const first = store.getState();
+  drawCount(first.count);
+  drawName(first.user);
 
-  store.subscribe(render);
+  // Two watchers, one per piece of the state, rather than one that redraws
+  // everything. The counters next to them are the proof: type in the name box
+  // and the count is not redrawn once.
+  let countRedraws = 0;
+  let nameRedraws = 0;
+
+  store.subscribe(
+    (state: AppState) => state.count,
+    (value) => {
+      drawCount(value);
+      countRedraws += 1;
+      countDraws.textContent = String(countRedraws);
+    },
+  );
+
+  store.subscribe(
+    (state: AppState) => state.user,
+    (value) => {
+      drawName(value);
+      nameRedraws += 1;
+      nameDraws.textContent = String(nameRedraws);
+    },
+  );
 
   // The page changes on the dispatch line itself. The promise is optional:
   // it says whether main agreed, and here it is used only to dim the number

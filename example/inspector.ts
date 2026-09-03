@@ -74,6 +74,17 @@ function asks(action: AppAction): string {
   }
 }
 
+/** "change 9", or "changes 9-13" when one message carries several. */
+function changes(since: number, seq: number): string {
+  return seq - since <= 1 ? `change ${seq}` : `changes ${since + 1}\u2013${seq}`;
+}
+
+/** " · answers A #3 and B #1", or nothing at all. */
+function answers(origins: Origin[] | undefined): string {
+  if (!origins || origins.length === 0) return "";
+  return ` \u00b7 answers ${list(origins.map(whose))}`;
+}
+
 /** "A and B", "A", "nobody". */
 function list(names: string[]): string {
   if (names.length === 0) return "nobody";
@@ -114,15 +125,15 @@ function describe(entry: Feed): string {
     case "reducer-ran":
       return `the rules ran ${asks(e.action)} → ${brief(e.after)}`;
     case "broadcast":
-      return `sent change ${e.seq} to ${list(e.to.map(who))}${e.origin ? ` · answers ${whose(e.origin)}` : ""}`;
+      return `sent ${changes(e.since, e.seq)} to ${list(e.to.map(who))}${answers(e.origins)}`;
     case "bootstrap-applied":
       return `first copy in place · change ${e.seq}`;
     case "dispatch-sent":
       return `applied ${asks(e.action)} as a guess · asked the owner (#${e.origin.n})`;
     case "update-received":
-      return `change ${e.seq} arrived · ${
+      return `${changes(e.since, e.seq)} arrived · ${
         e.verdict === "applied" ? "used it" : e.verdict === "stale" ? "older than mine, ignored" : "a number is missing"
-      }${e.origin ? ` · answers ${whose(e.origin)}` : ""}`;
+      }${answers(e.origins)}`;
     case "resync-started":
       return "missed a message · asking main for a fresh copy";
     case "resync-finished":
@@ -283,6 +294,29 @@ function setVerdict(p: Pane, text: string, cls: string): void {
  */
 const asked = new Map<string, number>();
 const waitingEl = el("waiting");
+
+/**
+ * The other half of the argument: how many asks arrived, against how many
+ * messages the owner had to send to answer all of them. Fifty clicks in one
+ * moment are answered by a handful of messages, because everything applied in
+ * one go leaves in one message.
+ */
+const asksEl = el("asks");
+const sentEl = el("sent-out");
+const mainSent = el("main-sent");
+let askCount = 0;
+let sentCount = 0;
+
+function countedAsk(): void {
+  askCount += 1;
+  asksEl.textContent = String(askCount);
+}
+
+function countedSend(): void {
+  sentCount += 1;
+  sentEl.textContent = String(sentCount);
+  mainSent.textContent = String(sentCount);
+}
 
 function askKey(origin: Origin): string {
   return `${origin.client}#${origin.n}`;
@@ -461,6 +495,7 @@ function handle(entry: Feed): void {
         return;
       }
       case "dispatch-received": {
+        countedAsk();
         enqueue(() => flash(at.handler("dispatch"), "flash-main"));
         return;
       }
@@ -481,6 +516,7 @@ function handle(entry: Feed): void {
         return;
       }
       case "broadcast": {
+        countedSend();
         const targets = e.to.map(paneFor).filter((p): p is Pane => p !== undefined);
         enqueue(async () => {
           mainSeq.textContent = String(e.seq);
@@ -551,13 +587,13 @@ function handle(entry: Feed): void {
       return;
     }
     case "update-received": {
-      const mine = e.origin && clientOf.get(e.origin.client) === label;
+      const mine = e.origins?.some((origin) => clientOf.get(origin.client) === label);
       const text =
         e.verdict === "applied"
-          ? `change ${e.seq}${mine ? ", my own" : ""} · now official`
+          ? `${changes(e.since, e.seq)}${mine ? ", mine among them" : ""} · now official`
           : e.verdict === "stale"
-            ? `change ${e.seq} · older than mine, ignored`
-            : `change ${e.seq} · I missed one, asking for a fresh copy`;
+            ? `${changes(e.since, e.seq)} · older than mine, ignored`
+            : `${changes(e.since, e.seq)} · I missed one, asking for a fresh copy`;
       enqueue(async () => {
         setVerdict(p, text, `verdict-${e.verdict}`);
         // The state the page sees follows in its own "mirror-changed" event.
@@ -807,6 +843,10 @@ el("clear").addEventListener("click", () => {
   logList.replaceChildren();
   logCount = 0;
   logCounter.textContent = "0";
+  askCount = 0;
+  sentCount = 0;
+  asksEl.textContent = "0";
+  sentEl.textContent = "0";
 });
 
 // ---------------------------------------------------------------------------

@@ -48,6 +48,21 @@ export const topics: Record<string, Topic> = {
     ],
   },
 
+  batching: {
+    title: "Why fifty asks make three messages",
+    file: "src/core/store.ts · one message per moment",
+    essence:
+      "The owner does not send a message for every single change. Everything it changes in one moment goes out together, in one message. Each message says which changes it covers, so a window can still tell \"that was five changes at once\" apart from \"I missed five\".",
+    steps: [
+      "Fifty asks arrive in one moment. I answer all of them.",
+      "I number the changes as I make them: 1, 2, 3, all the way to 50.",
+      "I send one message: here is the new state, and it covers changes 1 to 50.",
+      "A window that was up to date takes it, because the message starts exactly where the window left off.",
+      "A window holding 7 that gets a message starting at 12 knows something never arrived, and asks for a fresh copy.",
+      "The same idea inside each window: a part of the page that only watches the count is left alone when the name changes.",
+    ],
+  },
+
   main: {
     title: "The owner",
     file: "src/main/index.ts · the main process",
@@ -66,7 +81,8 @@ export const topics: Record<string, Topic> = {
     steps: [
       "Someone reads the current value. No waiting — it is right here.",
       "Someone hands me a change. I pass it to the rules and keep what comes back.",
-      "I tell every listener that the value changed.",
+      "I tell everyone watching that the value changed — but once per moment, not once per change.",
+      "A watcher can ask about one part only, and I leave it alone while anything else changes.",
       "I know nothing about windows or messages, which is why the very same code runs on both sides.",
     ],
   },
@@ -120,10 +136,11 @@ export const topics: Record<string, Topic> = {
     title: "Every change, to every window",
     file: "src/main/index.ts · the update message",
     steps: [
-      "The state changed.",
-      "I add one to the number: 7, then 8, then 9.",
-      "I send the new state and that number to every window at the same moment.",
-      "A window holding 7 that receives 9 knows it missed 8, and asks for a fresh copy instead of trusting it.",
+      "The state changed — maybe once, maybe fifty times in the same moment.",
+      "I number every change: 7, then 8, then 9.",
+      "I send one message to every window: the new state, and which changes it covers.",
+      "A window takes the message if it starts exactly where that window left off.",
+      "If it starts anywhere else, the window knows something never reached it, and asks for a fresh copy instead of trusting it.",
     ],
   },
 
@@ -178,6 +195,8 @@ export const topics: Record<string, Topic> = {
       "The owner says yes: the ask leaves the list, and what you already saw was right.",
       "The owner says no: the ask leaves the list, and the screen goes back to the official state.",
       "A change caused by the other window arrives: I take it, then put my own waiting guesses back on top.",
+      "One message can answer several of my asks at once, and I retire all of them together.",
+      "I only wake the parts of the page whose own piece of the state actually moved.",
     ],
   },
 
