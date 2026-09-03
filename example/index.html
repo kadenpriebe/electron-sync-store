@@ -26,6 +26,17 @@
         font-size: 4rem;
         font-variant-numeric: tabular-nums;
         margin: 0 0 1rem;
+        transition: color 0.15s;
+      }
+      /* Shown while main has not yet answered: the number is a guess. */
+      .count.unconfirmed {
+        color: #8a7a4a;
+      }
+      .note {
+        min-height: 1.2em;
+        margin: 0.5rem 0 0;
+        font-size: 0.85rem;
+        color: #b3261e;
       }
       button {
         font: inherit;
@@ -60,6 +71,7 @@
     <p class="count" id="count">—</p>
     <button id="dec">−</button>
     <button id="inc">+</button>
+    <p class="note" id="note"></p>
 
     <label for="user-input">user</label>
     <input id="user-input" type="text" />

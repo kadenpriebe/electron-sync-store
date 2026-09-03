@@ -101,6 +101,26 @@
         border-color: var(--rend);
         color: var(--rend);
       }
+      button.armed {
+        background: rgba(248, 81, 73, 0.16);
+        border-color: var(--bad);
+        color: var(--bad);
+      }
+      .group {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding-left: 10px;
+        border-left: 1px solid var(--line);
+      }
+      .group > span {
+        color: var(--muted);
+        font-size: 11.5px;
+        margin-right: 4px;
+      }
+      .group button {
+        padding: 5px 9px;
+      }
 
       main {
         flex: 1;
@@ -178,6 +198,19 @@
       }
       .strip b {
         font-weight: 600;
+      }
+      /* A guess: shown in the strip and the mirror while main has not answered. */
+      .guess {
+        font: 11px var(--mono);
+        color: var(--main);
+        border: 1px dashed var(--main);
+        border-radius: 4px;
+        padding: 1px 6px;
+        margin-left: auto;
+      }
+      .flash-guess {
+        border-style: dashed !important;
+        border-color: var(--main) !important;
       }
       .main-grid {
         display: grid;
@@ -322,8 +355,12 @@
       .verdict-stale {
         color: var(--warn);
       }
-      .verdict-gap {
+      .verdict-gap,
+      .verdict-rejected {
         color: var(--bad);
+      }
+      .verdict-guess {
+        color: var(--main);
       }
 
       /* ---------- side column ---------- */
@@ -587,6 +624,10 @@
         background: var(--rend);
         color: var(--rend);
       }
+      .dot.x {
+        background: var(--bad);
+        color: var(--bad);
+      }
       @media (prefers-reduced-motion: reduce) {
         .dot,
         #you {
@@ -601,6 +642,15 @@
       <button data-topic="overview">what is this?</button>
       <button class="primary" id="journey-start">be a click</button>
       <button id="details-toggle">show details</button>
+      <div class="group" title="how long each message takes to cross between processes">
+        <span>latency</span>
+        <button data-latency="0" class="on">real</button>
+        <button data-latency="400">400 ms</button>
+        <button data-latency="1500">1.5 s</button>
+      </div>
+      <div class="group" title="main will refuse the next proposal, whatever it is">
+        <button id="reject-next">reject next</button>
+      </div>
       <button class="detail" data-reload="a">reload A</button>
       <button class="detail" data-reload="b">reload B</button>
     </header>
@@ -635,7 +685,7 @@
                 snapshot <em>resync · async</em>
               </div>
               <div class="chip" id="h-dispatch" data-explain="h-dispatch">
-                dispatch <em>fire-and-forget</em>
+                dispatch <em>request · verdict to sender</em>
               </div>
               <div class="chip" id="h-broadcast" data-explain="h-broadcast">
                 update <em>broadcast to all</em>
@@ -657,6 +707,7 @@
             <div class="strip" id="a-strip">
               <span>copy</span><b id="a-strip-state">—</b>
               <span>seq</span><b id="a-strip-seq">—</b>
+              <span class="guess" id="a-strip-pending" hidden></span>
             </div>
             <div class="rend-row detail">
               <div class="box" id="a-preload-box" data-explain="preload">
@@ -666,7 +717,8 @@
               <div class="box" id="a-mirror" data-explain="mirror">
                 <div class="box-title">mirror <span>src/renderer/index.ts</span></div>
                 <div class="kv"><span>lastSeq</span><b id="a-seq">—</b></div>
-                <div class="kv"><span>last update</span><b id="a-verdict">—</b></div>
+                <div class="kv"><span>pending guesses</span><b id="a-pending">0</b></div>
+                <div class="kv"><span>last event</span><b id="a-verdict">—</b></div>
                 <pre id="a-state">—</pre>
               </div>
             </div>
@@ -686,6 +738,7 @@
             <div class="strip" id="b-strip">
               <span>copy</span><b id="b-strip-state">—</b>
               <span>seq</span><b id="b-strip-seq">—</b>
+              <span class="guess" id="b-strip-pending" hidden></span>
             </div>
             <div class="rend-row detail">
               <div class="box" id="b-preload-box" data-explain="preload">
@@ -695,7 +748,8 @@
               <div class="box" id="b-mirror" data-explain="mirror">
                 <div class="box-title">mirror <span>src/renderer/index.ts</span></div>
                 <div class="kv"><span>lastSeq</span><b id="b-seq">—</b></div>
-                <div class="kv"><span>last update</span><b id="b-verdict">—</b></div>
+                <div class="kv"><span>pending guesses</span><b id="b-pending">0</b></div>
+                <div class="kv"><span>last event</span><b id="b-verdict">—</b></div>
                 <pre id="b-state">—</pre>
               </div>
             </div>
@@ -737,6 +791,14 @@
               decides, and the owner sends the result back down to everyone.
             </p>
             <p>Try it: click <b>+</b> in either window and watch the other one.</p>
+            <p>
+              Then set <b>latency</b> to 1.5 s and click again. The window you
+              clicked in changes at once, before the message has even reached
+              the owner: that is an <b>optimistic update</b>, a guess. The other
+              window changes when the owner's answer arrives. Now press
+              <b>reject next</b> and click: the guess is wrong this time, and the
+              number snaps back when the owner says no.
+            </p>
             <div class="actions">
               <button class="primary" data-journey>
                 be a click

@@ -46,7 +46,7 @@ export const topics: Record<string, Topic> = {
       ["mirror", "this library's word for a renderer's full local copy of main's state."],
     ],
     why: "Two processes cannot share memory. That single fact forces every design decision you see here: someone must own the truth, everyone else must hold a copy, and copies must be kept current by messages.",
-    watch: "Click + in a pane and follow one dot up to main and two dots back down. That round trip is the whole library in one motion.",
+    watch: "Click + in a pane and follow one dot up to main and two dots back down. That round trip is the whole library in one motion. Then set latency to 1.5 s and notice the pane you clicked in changed before the dot arrived: it guessed.",
   },
 
   main: {
@@ -108,7 +108,7 @@ export const topics: Record<string, Topic> = {
       ["exhaustiveness check", "using `never` so the compiler proves every case is handled."],
       ["immutable update", "returning a new object ({ ...state, count: state.count + 1 }) instead of editing the old one."],
     ],
-    why: "The library is generic: it does not know what your state looks like. I am where the app's meaning lives. Keeping me pure is what will let a renderer run me locally to guess the outcome before main confirms it (that is the next feature).",
+    why: "The library is generic: it does not know what your state looks like. I am where the app's meaning lives. Keeping me pure is what lets a renderer run me locally to guess the outcome before main confirms it: the same card, the same answer. In this demo main's copy of me is wrapped with one extra rule, the chaos switch, which is how a guess gets to be wrong.",
     watch: "I flash amber when I run, and the text shows the action and the state I produced.",
   },
 
@@ -152,20 +152,23 @@ export const topics: Record<string, Topic> = {
 
   "h-dispatch": {
     title: "dispatch handler",
-    file: "src/main/index.ts · ipcMain.on",
-    who: "I receive proposals. A renderer cannot change state; it can only ask me to.",
+    file: "src/main/index.ts · ipcMain.handle",
+    who: "I receive proposals and answer each one. A renderer cannot change state; it can only ask me to, and I always say yes or no.",
     picture:
-      "I am the order window. A slip comes in, I hand it to the store, which hands it to the recipe card. The dining room that sent it does not wait for a reply; it goes back to serving and finds out what happened when the board updates like everyone else.",
+      "I am the order window. A slip comes in with the room's name and a ticket number on it. I hand it to the store, which hands it to the recipe card. If the card accepts it, the boards get rewritten and I send the slip back stamped 'confirmed, rewrite 8'. If the card refuses (it throws), nothing changes anywhere and I send the slip back stamped 'refused' with the reason. Either way the answer goes only to the room that asked.",
     steps: [
-      "ipcRenderer.send arrives with an action.",
-      "I call store.dispatch(action). That runs the reducer and, via the store's listener, triggers a broadcast.",
+      "ipcRenderer.invoke arrives with {origin, action}. origin is the sender's client id and its own count of proposals.",
+      "I remember the origin for the duration of the dispatch, so the broadcast it causes can carry it.",
+      "I call store.dispatch(action) inside a try. Success: return {status: 'confirmed', seq}. The reducer threw: return {status: 'rejected', reason}. The reply is a value in both cases; I never throw.",
     ],
     terms: [
-      ["fire-and-forget", "send with no reply. The sender is never blocked."],
-      ["propose vs. apply", "renderers propose actions; only main applies them."],
+      ["invoke / handle", "request-response IPC. The renderer gets a promise of my reply."],
+      ["origin", "{client, n}: which mirror proposed this, and which of its proposals it is. Echoed on the broadcast."],
+      ["rejection", "the reducer threw. State untouched, no broadcast, reason returned to the proposer alone."],
+      ["propose vs. apply", "renderers propose actions; only main applies them. The renderer may guess, but I decide."],
     ],
-    why: "Fire-and-forget keeps the UI thread free. The trade is that the sender's own screen does not change until the broadcast returns, one round trip later. That visible gap is exactly what optimistic updates will fill.",
-    watch: "I flash when a blue dot lands. The reducer flashes right after.",
+    why: "The sender has already applied the action to its own copy as a guess. My reply is what tells it whether the guess held. Broadcasts go to everyone and cannot say no to one window; the addressed reply can, and it also carries the seq the change landed at, so a guess can be retired even if its broadcast was lost.",
+    watch: "I flash when a blue dot lands. Green: the reducer ran and a broadcast follows. Red: refused, and a red dot carries the reason back to the sender only.",
   },
 
   "h-broadcast": {
@@ -252,23 +255,27 @@ export const topics: Record<string, Topic> = {
   mirror: {
     title: "Mirror",
     file: "src/renderer/index.ts",
-    who: "I am this renderer's full local copy of the state, and the rules for keeping it honest.",
+    who: "I am this renderer's full local copy of the state, plus this renderer's own unconfirmed changes drawn on top, and the rules for keeping both honest.",
     picture:
-      "I am the menu board on this room's wall. Reading me is instant because I am right here. The kitchen rewrites me by message, and each rewrite carries a number. I only accept a rewrite if its number is exactly one more than mine. Lower or equal, I have already seen it. Two or more higher, I missed one, and I refuse to guess: I put the rewrite down and ask the kitchen for the whole menu.",
+      "I am the menu board on this room's wall, with a strip of sticky notes down the side. The board itself is only ever rewritten by the kitchen, and each rewrite carries a number I check. The sticky notes are this room's own orders that the kitchen has not answered yet. What the waiter reads is the board with the notes applied on top, worked out with the same recipe card the kitchen uses. When the kitchen confirms an order, its note comes off. When the kitchen refuses one, its note comes off too, and the board simply no longer shows it: that is the rollback, and nothing had to be saved to do it. When the kitchen rewrites the board for someone else's order, my notes get re-applied on top of the new board.",
     steps: [
       "Start from bridge.initialState. No await; the preload already fetched it.",
-      "getState() returns my copy. Never touches IPC.",
-      "On each update: seq ≤ mine → stale, ignore. seq = mine + 1 → apply and notify. Otherwise → gap, resync.",
-      "resync() is guarded: never two at once, and a returned snapshot is applied only if newer than what arrived while waiting.",
+      "dispatch(action): push a guess onto the pending list, re-derive the visible state, notify, then invoke main. Return a promise of main's verdict that never rejects.",
+      "getState() returns the visible state: confirmed, with pending replayed on top through the reducer. Never touches IPC.",
+      "On each update: seq ≤ mine → stale, ignore. seq = mine + 1 → take it as confirmed; if its origin is mine, retire that guess; re-derive. Otherwise → gap, resync.",
+      "On main's reply: rejected → drop the guess and re-derive (the rollback). Confirmed → the guess goes as soon as confirmed has reached the seq named, usually already.",
     ],
     terms: [
-      ["eventually consistent", "I am briefly behind main after every change (about one IPC hop), then catch up."],
+      ["optimistic update", "apply a change locally before the authority confirms it, on the assumption it will."],
+      ["pending queue", "the list of this renderer's proposals main has not ruled on yet."],
+      ["rebase", "replaying pending guesses on top of a new confirmed state (a Replicache / Linear term)."],
+      ["rollback", "a rejected guess leaves the queue; the replay without it is the reverted state."],
+      ["origin", "the {client, n} tag on a broadcast that says which guess it confirms. Without it, your own change would show twice for a moment."],
+      ["eventually consistent", "the confirmed part of me is briefly behind main after every change, then catches up."],
       ["gap detection", "noticing a missing sequence number rather than silently applying the wrong next state."],
-      ["stale", "an update at or below my current seq; already reflected."],
-      ["self-healing", "recovering from a gap automatically, without the app noticing."],
     ],
-    why: "The slow-snapshot guard matters: without it, a resync that takes a while could return and overwrite fresher state that arrived in the meantime with older state. That is the bug this kind of machinery usually introduces, and it is handled.",
-    watch: "My lastSeq and last verdict. Green 'applied' is the normal case. Red would mean a gap, followed by a blue dot to the snapshot handler.",
+    why: "The obvious alternative, remembering the state before the guess and restoring it on failure, breaks in exactly the cases that matter: a broadcast from another window arriving mid-flight is undone by the restore, and so is any later guess. Replaying a queue on top of the confirmed state has neither problem. It costs holding the reducer here, which is why createRendererStore takes it as its first argument. The slow-snapshot guard on resync still matters too: a late snapshot must never overwrite fresher state.",
+    watch: "Set latency to 1.5 s and click +. My 'pending guesses' goes to 1 and the strip shows the guess before any dot has moved. Then arm 'reject next' and click: the guess is drawn, a red dot comes back, and the state snaps to the confirmed value.",
   },
 
   page: {
@@ -278,14 +285,15 @@ export const topics: Record<string, Topic> = {
     picture:
       "I am the waiter. I look at the board on the wall and tell customers what is available. When a customer wants something, I write a slip and drop it in the chute. I never phone the kitchen and I never wait; the board on the wall will update when it updates.",
     steps: [
-      "createRendererStore(): synchronous. State is available on the next line.",
+      "createRendererStore(reducer): synchronous. State is available on the next line.",
       "render(store.getState()) on line one. No loading state anywhere.",
-      "store.subscribe(render) so every applied update repaints.",
-      "Buttons and the input call store.dispatch(...).",
+      "store.subscribe(render) so every change to the visible state repaints, including guesses and rollbacks.",
+      "Buttons and the input call store.dispatch(...). The page changes on that line. The promise it returns is optional; here it dims the number until main answers and prints the reason if a guess is rolled back.",
     ],
     terms: [
       ["consumer", "code that uses the library's store without knowing how it is implemented."],
       ["synchronous read", "getState() returns immediately from local memory."],
+      ["never-rejecting promise", "dispatch resolves to {status: 'confirmed' | 'rejected'} and never throws, so ignoring it is safe."],
     ],
     why: "The whole design is measured by how simple I get to be. If I needed an await, a spinner, or knowledge of channels, the library would have leaked its implementation into the app.",
     watch: "This pane is a real renderer process drawn inside the diagram. Clicking + here is a real click in a real page.",

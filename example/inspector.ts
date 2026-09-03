@@ -10,6 +10,7 @@
  *   be a click   you become one message and walk it from click to pixel, with
  *                the real values from your click
  */
+import type { Origin } from "../src/shared/protocol";
 import type { Feed, PaneLabel, Rect, Slots } from "./demo-protocol";
 import { topics, type Topic } from "./explanations";
 import type { InspectorBridge } from "./inspector-preload";
@@ -36,9 +37,8 @@ function el<T extends HTMLElement>(id: string): T {
 /** webContents.id → which pane it is. Filled by "pane-created" meta events. */
 const labelOf = new Map<number, PaneLabel>();
 
-/** Main's state at each seq, so a mirror's state can be shown from its seq. */
-const stateAtSeq = new Map<number, AppState>();
-let pendingState: AppState | undefined;
+/** A mirror's random client id → which pane it lives in. Learned from its first dispatch. */
+const clientOf = new Map<string, PaneLabel>();
 
 let firstAt: number | undefined;
 let logCount = 0;
@@ -46,6 +46,13 @@ let logCount = 0;
 function who(id: number): string {
   const label = labelOf.get(id);
   return label ? label.toUpperCase() : `wc${id}`;
+}
+
+/** "A #3": which pane's guess, and which one. */
+function whose(origin: Origin | undefined): string {
+  if (!origin) return "";
+  const label = clientOf.get(origin.client);
+  return `${label ? label.toUpperCase() : "?"} #${origin.n}`;
 }
 
 function show(state: AppState | undefined): string {
@@ -69,22 +76,32 @@ function describe(entry: Feed): string {
   switch (e.kind) {
     case "pane-created":
       return `renderer ${e.label.toUpperCase()} = webContents ${e.id}`;
+    case "reject-armed":
+      return e.armed ? "chaos switch armed: main will refuse the next proposal" : "chaos switch off";
     case "bootstrap-served":
       return `bootstrap → ${who(e.to)}  (seq ${e.seq})`;
     case "snapshot-served":
       return `snapshot → ${who(e.to)}  (seq ${e.seq})`;
     case "dispatch-received":
-      return `dispatch ← ${who(e.from)}  ${JSON.stringify(e.action)}`;
+      return `dispatch ← ${whose(e.origin)}  ${JSON.stringify(e.action)}`;
+    case "dispatch-rejected":
+      return "from" in e
+        ? `refused ${whose(e.origin)}: ${e.reason} → reply to ${who(e.from)} only`
+        : `main refused #${e.origin.n}: ${e.reason} → rolled back`;
+    case "dispatch-confirmed":
+      return `main confirmed #${e.origin.n} at seq ${e.seq}`;
+    case "mirror-changed":
+      return `page sees ${brief(e.state)}${e.pending ? ` · ${e.pending} pending` : ""}`;
     case "reducer-ran":
       return `reducer ${e.action.type} → ${JSON.stringify(e.after)}`;
     case "broadcast":
-      return `broadcast seq ${e.seq} → ${e.to.map(who).join(", ") || "nobody"}`;
+      return `broadcast seq ${e.seq}${e.origin ? ` (${whose(e.origin)})` : ""} → ${e.to.map(who).join(", ") || "nobody"}`;
     case "bootstrap-applied":
       return `mirror populated, seq ${e.seq}`;
     case "dispatch-sent":
-      return `dispatch ${JSON.stringify(e.action)}`;
+      return `guess #${e.origin.n} ${JSON.stringify(e.action)} applied, sent to main`;
     case "update-received":
-      return `update seq ${e.seq}: ${e.verdict}`;
+      return `update seq ${e.seq}: ${e.verdict}${e.origin ? ` (${whose(e.origin)})` : ""}`;
     case "resync-started":
       return "gap → asking main for a snapshot";
     case "resync-finished":
@@ -148,11 +165,13 @@ type Pane = {
   strip: HTMLElement;
   stripState: HTMLElement;
   stripSeq: HTMLElement;
+  stripPending: HTMLElement;
   preloadBox: HTMLElement;
   preload: HTMLElement;
   boot: HTMLElement;
   mirror: HTMLElement;
   seq: HTMLElement;
+  pending: HTMLElement;
   verdict: HTMLElement;
   state: HTMLElement;
   pageTitle: HTMLElement;
@@ -165,11 +184,13 @@ function pane(label: PaneLabel): Pane {
     strip: el(`${label}-strip`),
     stripState: el(`${label}-strip-state`),
     stripSeq: el(`${label}-strip-seq`),
+    stripPending: el(`${label}-strip-pending`),
     preloadBox: el(`${label}-preload-box`),
     preload: el(`${label}-preload`),
     boot: el(`${label}-boot`),
     mirror: el(`${label}-mirror`),
     seq: el(`${label}-seq`),
+    pending: el(`${label}-pending`),
     verdict: el(`${label}-verdict`),
     state: el(`${label}-state`),
     pageTitle: el(`${label}-page-title`),
@@ -210,10 +231,24 @@ function setMainState(state: AppState): void {
 function setMirror(p: Pane, seq: number, state: AppState | undefined): void {
   p.seq.textContent = String(seq);
   p.stripSeq.textContent = String(seq);
-  if (state) {
-    p.state.textContent = show(state);
-    p.stripState.textContent = brief(state);
-  }
+  if (state) setMirrorState(p, state);
+}
+
+/** What the page in this pane currently sees. */
+function setMirrorState(p: Pane, state: AppState): void {
+  p.state.textContent = show(state);
+  p.stripState.textContent = brief(state);
+}
+
+function setPending(p: Pane, n: number): void {
+  p.pending.textContent = String(n);
+  p.stripPending.hidden = n === 0;
+  p.stripPending.textContent = n === 1 ? "1 guess pending" : `${n} guesses pending`;
+}
+
+function setVerdict(p: Pane, text: string, cls: string): void {
+  p.verdict.textContent = text;
+  p.verdict.className = cls;
 }
 
 /**
@@ -225,10 +260,16 @@ const truth: {
   state?: AppState;
   seq: number;
   lastReducer?: string;
-  mirrors: Record<PaneLabel, { seq: number; state?: AppState; verdict: string }>;
+  mirrors: Record<
+    PaneLabel,
+    { seq: number; state?: AppState; verdict: string; verdictClass: string; pending: number }
+  >;
 } = {
   seq: 0,
-  mirrors: { a: { seq: 0, verdict: "—" }, b: { seq: 0, verdict: "—" } },
+  mirrors: {
+    a: { seq: 0, verdict: "—", verdictClass: "", pending: 0 },
+    b: { seq: 0, verdict: "—", verdictClass: "", pending: 0 },
+  },
 };
 
 function syncPicture(): void {
@@ -238,7 +279,8 @@ function syncPicture(): void {
   for (const label of ["a", "b"] as const) {
     const m = truth.mirrors[label];
     setMirror(panes[label], m.seq, m.state);
-    panes[label].verdict.textContent = m.verdict;
+    setPending(panes[label], m.pending);
+    setVerdict(panes[label], m.verdict, m.verdictClass);
   }
 }
 
@@ -266,7 +308,7 @@ function tempo(): number {
 }
 
 /** Move a dot from one element to another. Resolves when it arrives. */
-function travel(from: HTMLElement, to: HTMLElement, color: "m" | "r"): Promise<void> {
+function travel(from: HTMLElement, to: HTMLElement, color: "m" | "r" | "x"): Promise<void> {
   return new Promise((resolve) => {
     const a = center(from);
     const b = center(to);
@@ -334,9 +376,13 @@ function handle(entry: Feed): void {
   journeyObserve(entry);
 
   if (entry.side === "meta") {
-    const { id, label } = entry.event;
-    labelOf.set(id, label);
-    panes[label].id.textContent = `webContents ${id}`;
+    const e = entry.event;
+    if (e.kind === "pane-created") {
+      labelOf.set(e.id, e.label);
+      panes[e.label].id.textContent = `webContents ${e.id}`;
+    } else {
+      showRejectArmed(e.armed);
+    }
     return;
   }
 
@@ -367,8 +413,15 @@ function handle(entry: Feed): void {
         enqueue(() => flash(at.handler("dispatch"), "flash-main"));
         return;
       }
+      case "dispatch-rejected": {
+        const p = paneFor(e.from);
+        enqueue(async () => {
+          await flash(at.handler("dispatch"), "flash-bad");
+          if (p) await travel(at.handler("dispatch"), at.preload(p), "x");
+        });
+        return;
+      }
       case "reducer-ran": {
-        pendingState = e.after;
         truth.state = e.after;
         truth.lastReducer = `${e.action.type} → ${show(e.after)}`;
         enqueue(async () => {
@@ -379,7 +432,6 @@ function handle(entry: Feed): void {
         return;
       }
       case "broadcast": {
-        if (pendingState) stateAtSeq.set(e.seq, pendingState);
         truth.seq = e.seq;
         const targets = e.to.map(paneFor).filter((p): p is Pane => p !== undefined);
         enqueue(async () => {
@@ -404,36 +456,80 @@ function handle(entry: Feed): void {
   const e = entry.event;
   switch (e.kind) {
     case "bootstrap-applied": {
-      stateAtSeq.set(e.seq, e.state);
       if (!truth.state) truth.state = e.state;
       if (mainStripState.textContent === "—") setMainState(e.state);
-      truth.mirrors[label] = { seq: e.seq, state: e.state, verdict: "bootstrap" };
+      truth.mirrors[label] = {
+        seq: e.seq,
+        state: e.state,
+        verdict: "bootstrap",
+        verdictClass: "",
+        pending: 0,
+      };
       enqueue(async () => {
         setMirror(p, e.seq, e.state);
-        p.verdict.textContent = "bootstrap";
-        p.verdict.className = "";
+        setPending(p, 0);
+        setVerdict(p, "bootstrap", "");
         await flash(at.mirror(p), "flash-rend");
       });
       return;
     }
     case "dispatch-sent": {
+      clientOf.set(e.origin.client, label);
+      const m = truth.mirrors[label];
+      m.verdict = `guess #${e.origin.n} · waiting for main`;
+      m.verdictClass = "verdict-guess";
       enqueue(async () => {
+        // The guess is already on the page by the time this event exists.
+        setVerdict(p, `guess #${e.origin.n} · waiting for main`, "verdict-guess");
+        await flash(at.mirror(p), "flash-guess", 200);
         await flash(at.preload(p), "flash-rend", 150);
         await travel(at.preload(p), at.handler("dispatch"), "r");
       });
       return;
     }
-    case "update-received": {
-      const state = stateAtSeq.get(e.seq);
-      if (e.verdict === "applied") {
-        truth.mirrors[label] = { seq: e.seq, state, verdict: `seq ${e.seq} · applied` };
-      } else {
-        truth.mirrors[label].verdict = `seq ${e.seq} · ${e.verdict}`;
-      }
+    case "dispatch-confirmed": {
+      const m = truth.mirrors[label];
+      m.verdict = `#${e.origin.n} confirmed · seq ${e.seq}`;
+      m.verdictClass = "verdict-applied";
       enqueue(async () => {
-        p.verdict.textContent = `seq ${e.seq} · ${e.verdict}`;
-        p.verdict.className = `verdict-${e.verdict}`;
-        if (e.verdict === "applied") setMirror(p, e.seq, state);
+        // The addressed reply, from the handler back to the sender alone.
+        await travel(at.handler("dispatch"), at.preload(p), "m");
+        setVerdict(p, `#${e.origin.n} confirmed · seq ${e.seq}`, "verdict-applied");
+        await flash(at.mirror(p), "flash-ok", 200);
+      });
+      return;
+    }
+    case "dispatch-rejected": {
+      const m = truth.mirrors[label];
+      m.verdict = `#${e.origin.n} refused · rolled back`;
+      m.verdictClass = "verdict-rejected";
+      enqueue(async () => {
+        setVerdict(p, `#${e.origin.n} refused · rolled back`, "verdict-rejected");
+        await flash(at.mirror(p), "flash-bad", 500);
+      });
+      return;
+    }
+    case "mirror-changed": {
+      const m = truth.mirrors[label];
+      m.state = e.state;
+      m.pending = e.pending;
+      enqueue(async () => {
+        setMirrorState(p, e.state);
+        setPending(p, e.pending);
+      });
+      return;
+    }
+    case "update-received": {
+      const m = truth.mirrors[label];
+      const mine = e.origin && clientOf.get(e.origin.client) === label;
+      const text = `seq ${e.seq} · ${e.verdict}${mine ? ` · own #${e.origin?.n}` : ""}`;
+      if (e.verdict === "applied") m.seq = e.seq;
+      m.verdict = text;
+      m.verdictClass = `verdict-${e.verdict}`;
+      enqueue(async () => {
+        setVerdict(p, text, `verdict-${e.verdict}`);
+        // The state the page sees follows in its own "mirror-changed" event.
+        if (e.verdict === "applied") setMirror(p, e.seq, undefined);
         await flash(at.mirror(p), e.verdict === "applied" ? "flash-ok" : "flash-bad");
       });
       return;
@@ -443,14 +539,14 @@ function handle(entry: Feed): void {
       return;
     }
     case "resync-finished": {
-      const state = stateAtSeq.get(e.seq);
-      if (e.applied) {
-        truth.mirrors[label] = { seq: e.seq, state, verdict: `resync seq ${e.seq} · applied` };
-      }
+      const m = truth.mirrors[label];
+      const text = `resync seq ${e.seq} · ${e.applied ? "applied" : "discarded"}`;
+      if (e.applied) m.seq = e.seq;
+      m.verdict = text;
+      m.verdictClass = e.applied ? "verdict-applied" : "verdict-stale";
       enqueue(async () => {
-        p.verdict.textContent = `resync seq ${e.seq} · ${e.applied ? "applied" : "discarded"}`;
-        p.verdict.className = e.applied ? "verdict-applied" : "verdict-stale";
-        if (e.applied) setMirror(p, e.seq, state);
+        setVerdict(p, text, e.applied ? "verdict-applied" : "verdict-stale");
+        if (e.applied) setMirror(p, e.seq, undefined);
         await flash(at.mirror(p), e.applied ? "flash-ok" : "flash-bad");
       });
       return;
@@ -613,11 +709,18 @@ type Captured = {
   sender: Pane;
   senderLabel: PaneLabel;
   action: AppAction;
+  origin: Origin;
   sentAt: number;
+  /** What the sender's page showed the moment it guessed. */
+  guess?: AppState;
   receivedAt?: number;
   before?: AppState;
   after?: AppState;
   seq?: number;
+  /** Main refused; the reason. */
+  rejected?: string;
+  /** When main's reply reached the sender. */
+  replyAt?: number;
   targets: PaneLabel[];
   applied: Map<PaneLabel, { at: number; verdict: string; seq: number }>;
 };
@@ -696,12 +799,15 @@ function journeyObserve(entry: Feed): void {
       sender: panes[label],
       senderLabel: label,
       action: entry.event.action,
+      origin: entry.event.origin,
       sentAt: entry.at,
+      // The mirror re-derived and told us before it sent; that was the guess.
+      guess: truth.mirrors[label].state,
       targets: [],
       applied: new Map(),
     };
     // Safety net: if main never answers, play what we have.
-    journey.timer = window.setTimeout(playJourney, 1500);
+    journey.timer = window.setTimeout(playJourney, 4000);
     return;
   }
 
@@ -709,6 +815,7 @@ function journeyObserve(entry: Feed): void {
   if (entry.side === "main") {
     const e = entry.event;
     if (e.kind === "dispatch-received") c.receivedAt = entry.at;
+    if (e.kind === "dispatch-rejected") c.rejected = e.reason;
     if (e.kind === "reducer-ran") {
       c.before = e.before;
       c.after = e.after;
@@ -717,14 +824,21 @@ function journeyObserve(entry: Feed): void {
       c.seq = e.seq;
       c.targets = e.to.map((id) => labelOf.get(id)).filter((l): l is PaneLabel => !!l);
     }
-  } else if (entry.side === "renderer" && entry.event.kind === "update-received") {
+  } else if (entry.side === "renderer") {
     const label = labelOf.get(entry.from);
-    if (label && c.seq === entry.event.seq) {
-      c.applied.set(label, { at: entry.at, verdict: entry.event.verdict, seq: entry.event.seq });
+    const e = entry.event;
+    if (e.kind === "update-received" && label && c.seq === e.seq) {
+      c.applied.set(label, { at: entry.at, verdict: e.verdict, seq: e.seq });
+    }
+    if (label === c.senderLabel && (e.kind === "dispatch-confirmed" || e.kind === "dispatch-rejected")) {
+      c.replyAt = entry.at;
     }
   }
 
-  const complete = c.seq !== undefined && c.targets.every((l) => c.applied.has(l));
+  const complete =
+    c.rejected !== undefined
+      ? c.replyAt !== undefined
+      : c.seq !== undefined && c.replyAt !== undefined && c.targets.every((l) => c.applied.has(l));
   if (complete) {
     window.clearTimeout(journey.timer);
     // Let the sender's own re-render happen before we freeze the picture.
@@ -736,12 +850,12 @@ function buildSteps(c: Captured): JourneyStep[] {
   const L = c.senderLabel.toUpperCase();
   const p = c.sender;
   const actionJson = JSON.stringify(c.action);
-  const seq = c.seq ?? 0;
-  const prevSeq = Math.max(0, seq - 1);
+  const n = c.origin.n;
+  const seq = c.seq ?? truth.seq;
+  const prevSeq = c.seq === undefined ? truth.seq : c.seq - 1;
   const mine = c.applied.get(c.senderLabel);
-  const roundTrip = mine ? mine.at - c.sentAt : undefined;
   const others = c.targets.filter((l) => l !== c.senderLabel).map((l) => l.toUpperCase());
-  const otherText = others.length ? ` Renderer ${others.join(" and ")} got the same broadcast and did the same.` : "";
+  const roundTrip = c.replyAt === undefined ? undefined : c.replyAt - c.sentAt;
   const ms = roundTrip === undefined ? "a few" : String(Math.max(1, roundTrip));
   const button = c.action.type === "increment" ? "+" : c.action.type === "decrement" ? "−" : "the input";
   const arrival =
@@ -751,22 +865,28 @@ function buildSteps(c: Captured): JourneyStep[] {
         ? ", less than a millisecond after you left"
         : `, ${c.receivedAt - c.sentAt} ms after you left`;
   const otherPanes = c.targets.filter((l) => l !== c.senderLabel).map((l) => panes[l]);
+  const guessCount = c.guess?.count ?? "?";
 
-  return [
+  const outbound: JourneyStep[] = [
     {
       at: p.pageTitle,
       title: `You were born as a click in Renderer ${L}.`,
-      text: `The page turned you into an action: ${actionJson}. That is all you are: a plain object with a type. No functions, nothing attached. The whole trip you are about to take already happened, in about ${ms} ms; the boxes above have been rewound so you can watch it in slow motion.`,
+      text: `The page turned you into an action: ${actionJson}. That is all you are: a plain object with a type. The whole trip you are about to take already happened, in about ${ms} ms. The boxes above have been rewound so you can watch it in slow motion. Keep an eye on the number in this window: it changes at the very next stop, before anything has crossed to main.`,
     },
     {
       at: p.mirror,
-      title: "The mirror passes you along.",
-      text: `The page called store.dispatch(you). This mirror is Renderer ${L}'s copy of the state, but it is not allowed to change itself. It does not know what "${c.action.type}" means. It hands you to the bridge and goes back to waiting.`,
+      title: "The mirror applies you at once, as a guess.",
+      text: `store.dispatch(you) pushed you onto the pending list and re-ran the reducer over the confirmed state: ${show(c.before ?? c.guess)} → ${show(c.guess)}. The page re-rendered from that. Nobody has asked main anything yet. This is the optimistic update: the assumption that main will agree, made visible immediately, and tagged as guess #${n} so the answer can find it later.`,
+      effect: () => {
+        if (c.guess) setMirrorState(p, c.guess);
+        setPending(p, 1);
+        setVerdict(p, `guess #${n} · waiting for main`, "verdict-guess");
+      },
     },
     {
       at: p.preload,
       title: "The bridge: the only door out.",
-      text: `The preload script exposed exactly four things to the page, and this is one of them: dispatch. It calls ipcRenderer.send and puts you on the wire. Fire-and-forget: nobody here waits for a reply.`,
+      text: `The preload exposed exactly four things to the page, and this is one of them: dispatch. It calls ipcRenderer.invoke with {origin: {client, n: ${n}}, action}. invoke, not send: a promise now waits for main's verdict, and the page may ignore it or use it.`,
     },
     {
       at: boundary,
@@ -776,12 +896,60 @@ function buildSteps(c: Captured): JourneyStep[] {
     {
       at: handlerEl.dispatch,
       title: "You arrive at main.",
-      text: `ipcMain.on("dispatch") received you${arrival}. Main is the only place allowed to change the state. Whatever order messages reach this counter is the order of truth. No clocks, no conflicts.`,
+      text: `ipcMain.handle("dispatch") received you${arrival}. Main is the only place allowed to change the state. Whatever order messages reach this counter is the order of truth. Main notes your origin, ${L} #${n}, so that whatever you cause can carry it.`,
     },
+  ];
+
+  if (c.rejected !== undefined) {
+    return [
+      ...outbound,
+      {
+        at: boxReducer,
+        title: "The reducer refuses you.",
+        text: `It threw: "${c.rejected}". The store never swapped, seq stays ${seq}, and no broadcast leaves. Main caught the throw and turned it into a reply. In an application this is any rule only main can check: a permission, a quota, a value that changed under the user's feet.`,
+        effect: () => {
+          reducerLast.textContent = `${c.action.type} → threw`;
+        },
+      },
+      {
+        at: handlerEl.dispatch,
+        title: "You go back as a verdict.",
+        text: `{status: "rejected", reason: "${c.rejected}"}, addressed to Renderer ${L} alone. No other window ever hears that you existed. That is what the addressed reply can do that a broadcast cannot: say no to one window.`,
+      },
+      {
+        at: boundary,
+        title: "Crossing back.",
+        text: `Copied once more, into Renderer ${L}'s memory only.`,
+      },
+      {
+        at: p.preload,
+        title: `Caught by Renderer ${L}'s preload.`,
+        text: `The promise from stop 3 resolves with the verdict, ${ms} ms after you left. It resolves, it does not reject: a caller that ignored the promise is not holding an unhandled rejection.`,
+      },
+      {
+        at: p.mirror,
+        title: "The rollback.",
+        text: `Guess #${n} leaves the pending list and the visible state is re-derived from the confirmed state: ${show(c.before ?? c.guess)}. Nothing was saved and restored. The replay simply no longer includes you, which is why a guess from another window, or a newer guess of your own, would have survived this untouched.`,
+        effect: () => {
+          if (c.before) setMirrorState(p, c.before);
+          setPending(p, 0);
+          setVerdict(p, `#${n} refused · rolled back`, "verdict-rejected");
+        },
+      },
+      {
+        at: p.pageTitle,
+        title: "The pixel snaps back.",
+        text: `The number showed ${guessCount} for ${ms} ms and shows ${c.before?.count ?? "?"} again now, with the reason underneath. That is the honest cost of guessing: a wrong guess is visible for one round trip. The library's job was to make it exactly one round trip, roll back nothing else, and tell the page why.`,
+      },
+    ];
+  }
+
+  return [
+    ...outbound,
     {
       at: boxReducer,
       title: "The reducer consumes you.",
-      text: `It read your type, "${c.action.type}", and returned a new state: ${show(c.before)} → ${show(c.after)}. You, the action, end here. What continues is the new state.`,
+      text: `It read your type, "${c.action.type}", and returned a new state: ${show(c.before)} → ${show(c.after)}. The same reducer the mirror ran at stop 2, so the same answer. You, the action, end here. What continues is the new state.`,
       effect: () => {
         reducerLast.textContent = `${c.action.type} → ${show(c.after)}`;
       },
@@ -798,7 +966,7 @@ function buildSteps(c: Captured): JourneyStep[] {
     {
       at: handlerEl.broadcast,
       title: "You become a broadcast.",
-      text: `You are now {state, seq: ${seq}}. Main sends you to every renderer that bootstrapped: ${c.targets.map((l) => l.toUpperCase()).join(" and ") || "none"}. One copy per renderer, leaving at the same instant.`,
+      text: `You are now {state, seq: ${seq}, origin: ${L} #${n}}. Main sends you to every renderer that bootstrapped: ${c.targets.map((l) => l.toUpperCase()).join(" and ") || "none"}. One copy per renderer, leaving at the same instant. The origin is the part only Renderer ${L} will care about.`,
     },
     {
       at: boundary,
@@ -812,30 +980,37 @@ function buildSteps(c: Captured): JourneyStep[] {
     },
     {
       at: p.mirror,
-      title: "The mirror checks your number.",
-      text: `Is your seq (${seq}) exactly one more than mine (${prevSeq})? ${mine ? `Verdict: ${mine.verdict}.` : "Yes."} The mirror swaps in your state and tells its subscribers. If the number had skipped, it would have refused you and asked main for a full snapshot instead.`,
+      title: "The mirror checks your number, and your origin.",
+      text: `Is your seq (${seq}) exactly one more than mine (${prevSeq})? ${mine ? `Verdict: ${mine.verdict}.` : "Yes."} You become the confirmed state. And your origin is this mirror's own guess #${n}, so the guess is retired in the same step. Pending is empty; the page shows ${c.after?.count ?? "?"}, the number it has shown since stop 2. Without the origin the guess would have been replayed on top of you and shown ${typeof c.after?.count === "number" ? c.after.count + (c.action.type === "increment" ? 1 : c.action.type === "decrement" ? -1 : 0) : "N+2"} for a moment.`,
       effect: () => {
         setMirror(p, seq, c.after);
-        p.verdict.textContent = `seq ${seq} · ${mine?.verdict ?? "applied"}`;
-        p.verdict.className = `verdict-${mine?.verdict ?? "applied"}`;
+        setPending(p, 0);
+        setVerdict(p, `seq ${seq} · ${mine?.verdict ?? "applied"} · own #${n}`, `verdict-${mine?.verdict ?? "applied"}`);
+      },
+    },
+    {
+      at: p.preload,
+      title: "The verdict arrives.",
+      text: `{status: "confirmed", seq: ${seq}} resolves the promise from stop 3, ${ms} ms after you left. Nothing changes on screen; the page already knew. This reply is addressed to Renderer ${L} alone, and it is also the safety net: had the broadcast been lost, the seq in here is what would retire the guess after the resync.`,
+      effect: () => {
+        setVerdict(p, `#${n} confirmed · seq ${seq}`, "verdict-applied");
       },
     },
     {
       at: p.pageTitle,
-      title: "The pixel changes.",
-      text: `The page re-rendered from the mirror. The number you clicked ${button} for finally shows ${c.after?.count ?? "?"}. Round trip, click to pixel: about ${ms} ms.${otherText}`,
+      title: "The other windows catch up.",
+      text: `${others.length ? `Renderer ${others.join(" and ")} got the same broadcast, without a matching origin, and applied it the ordinary way, about ${ms} ms after your click.` : "No other renderer was open to catch up."} For the window that clicked, click to pixel was zero waiting: it changed at stop 2 and spent stops 3 to ${outbound.length + 7} checking.`,
       effect: () => {
         for (const other of otherPanes) {
           setMirror(other, seq, c.after);
-          other.verdict.textContent = `seq ${seq} · applied`;
-          other.verdict.className = "verdict-applied";
+          setVerdict(other, `seq ${seq} · applied`, "verdict-applied");
         }
       },
     },
     {
       at: p.pageTitle,
-      title: "The gap.",
-      text: `Look back at stop 1: the window you clicked in showed nothing until now. Every step in between took about ${ms} ms, and it is still a wait the user can feel on a slow machine. Letting the mirror apply your click at stop 2 and checking against main later is called an optimistic update. It is the next thing this library is getting.`,
+      title: "Why this is the point.",
+      text: `Every Electron state library surveyed for this project waits for the broadcast before changing the pixel. This one changed it at stop 2 and used the rest of the trip to check the guess. When the guess is wrong, main says so and only that guess is rolled back. Press "reject next", then "be a click" again, to walk that path.`,
     },
   ];
 }
@@ -856,15 +1031,15 @@ function playJourney(): void {
 
 /** Put the picture back to the moment before the captured click. */
 function rewindPicture(c: Captured): void {
-  const prevSeq = Math.max(0, (c.seq ?? 1) - 1);
+  const prevSeq = c.seq === undefined ? truth.seq : c.seq - 1;
   if (c.before) setMainState(c.before);
   mainSeq.textContent = String(prevSeq);
   reducerLast.textContent = "idle";
-  for (const label of c.targets) {
+  for (const label of new Set([c.senderLabel, ...c.targets])) {
     const p = panes[label];
     setMirror(p, prevSeq, c.before);
-    p.verdict.textContent = "—";
-    p.verdict.className = "";
+    setPending(p, 0);
+    setVerdict(p, "—", "");
   }
 }
 
@@ -965,6 +1140,27 @@ for (const button of document.querySelectorAll<HTMLButtonElement>("[data-reload]
   button.addEventListener("click", () => {
     const label = button.dataset["reload"] as PaneLabel;
     inspector.reload(label);
+  });
+}
+
+const rejectButton = el<HTMLButtonElement>("reject-next");
+let rejectArmed = false;
+
+function showRejectArmed(armed: boolean): void {
+  rejectArmed = armed;
+  rejectButton.classList.toggle("armed", armed);
+  rejectButton.textContent = armed ? "reject next · armed" : "reject next";
+}
+
+rejectButton.addEventListener("click", () => {
+  inspector.rejectNext(!rejectArmed);
+});
+
+for (const button of document.querySelectorAll<HTMLButtonElement>("[data-latency]")) {
+  button.addEventListener("click", () => {
+    for (const other of document.querySelectorAll("[data-latency]")) other.classList.remove("on");
+    button.classList.add("on");
+    inspector.latency(Number(button.dataset["latency"]));
   });
 }
 

@@ -60,9 +60,32 @@ app.whenReady().then(() => {
     inspector.webContents.send(DEMO.feed, { at: Date.now(), ...body });
   }
 
+  /**
+   * The chaos switch. When armed, the next proposal is refused no matter
+   * what it is. It lives here, in main, outside the state on purpose: a
+   * renderer cannot predict it, so its guess will be wrong, and the demo
+   * shows what the library does when a guess is wrong. In an application
+   * this is any rule only main can check — a permission, a quota, a value
+   * that changed under the user's feet.
+   */
+  let rejectNext = false;
+
+  function armReject(armed: boolean): void {
+    rejectNext = armed;
+    feed({ side: "meta", event: { kind: "reject-armed", armed } });
+  }
+
+  const guarded = (state: AppState, action: AppAction): AppState => {
+    if (rejectNext) {
+      armReject(false);
+      throw new Error("refused by main (chaos switch)");
+    }
+    return reducer(state, action);
+  };
+
   // The store lives in main and is created once, before any renderer exists.
   // Main's side of every decision goes straight to the inspector.
-  createMainStore<AppState, AppAction>(reducer, initialState, {
+  createMainStore<AppState, AppAction>(guarded, initialState, {
     trace: (event) => feed({ side: "main", event }),
   });
 
@@ -77,6 +100,9 @@ app.whenReady().then(() => {
 
   const panes = new Map<PaneLabel, WebContentsView>();
 
+  /** Artificial IPC latency, chosen in the inspector, applied in each pane's preload. */
+  let latency = 0;
+
   function createPane(label: PaneLabel, bounds: Rect): void {
     const pane = new WebContentsView({
       webPreferences: {
@@ -87,6 +113,13 @@ app.whenReady().then(() => {
     inspector.contentView.addChildView(pane);
     pane.setBounds(round(bounds));
     panes.set(label, pane);
+
+    // The preload registers its listener before the page loads, so by
+    // did-finish-load it is ready to hear the current setting. Fires again
+    // on every reload, which is exactly when the setting would be lost.
+    pane.webContents.on("did-finish-load", () => {
+      pane.webContents.send(DEMO.latency, latency);
+    });
 
     // Announce the pane before it loads, so the inspector can attribute the
     // very first trace event (the bootstrap) to the right box.
@@ -128,6 +161,17 @@ app.whenReady().then(() => {
 
   ipcMain.on(DEMO.reload, (_event, label: PaneLabel) => {
     panes.get(label)?.webContents.reload();
+  });
+
+  ipcMain.on(DEMO.latency, (_event, ms: number) => {
+    latency = ms;
+    for (const pane of panes.values()) {
+      pane.webContents.send(DEMO.latency, latency);
+    }
+  });
+
+  ipcMain.on(DEMO.rejectNext, (_event, armed: boolean) => {
+    armReject(armed);
   });
 
   void inspector.loadFile(path.join(__dirname, "inspector.html"));

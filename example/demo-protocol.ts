@@ -1,7 +1,8 @@
 /**
  * Channels and shapes used ONLY by the example's inspector. Nothing in here
  * is part of the library; it is the plumbing that lets one window watch what
- * the library is doing in main and in the two embedded renderers.
+ * the library is doing in main and in the two embedded renderers, and poke
+ * at the conditions it runs under.
  */
 import type { MainTraceEvent, RendererTraceEvent } from "../src/shared/trace";
 import type { AppAction, AppState } from "./state";
@@ -17,6 +18,14 @@ export const DEMO = {
   reload: "demo:reload",
   /** main → inspector: one entry for the log and the animation. */
   feed: "demo:feed",
+  /**
+   * inspector → main → every pane's preload: how long each message should
+   * take to cross the boundary, in ms. Real IPC is sub-millisecond; this
+   * makes the wait visible.
+   */
+  latency: "demo:latency",
+  /** inspector → main: refuse the next proposal, whatever it is. */
+  rejectNext: "demo:reject-next",
 } as const;
 
 export type PaneLabel = "a" | "b";
@@ -25,6 +34,11 @@ export type Rect = { x: number; y: number; width: number; height: number };
 
 export type Slots = Record<PaneLabel, Rect>;
 
+export type MetaEvent =
+  | { kind: "pane-created"; id: number; label: PaneLabel }
+  /** The chaos switch changed, or was consumed by a rejection. */
+  | { kind: "reject-armed"; armed: boolean };
+
 export type FeedBody =
   | { side: "main"; event: MainTraceEvent<AppState, AppAction> }
   | {
@@ -32,9 +46,6 @@ export type FeedBody =
       from: number;
       event: RendererTraceEvent<AppState, AppAction>;
     }
-  | {
-      side: "meta";
-      event: { kind: "pane-created"; id: number; label: PaneLabel };
-    };
+  | { side: "meta"; event: MetaEvent };
 
 export type Feed = FeedBody & { at: number };
