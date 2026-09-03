@@ -28,6 +28,11 @@
       * {
         box-sizing: border-box;
       }
+      /* Class rules below set display; without this they would beat the
+         hidden attribute and both side panels would show at once. */
+      [hidden] {
+        display: none !important;
+      }
       html,
       body {
         height: 100%;
@@ -36,17 +41,19 @@
         margin: 0;
         background: var(--bg);
         color: var(--text);
-        font: 13px/1.4 var(--sans);
+        font: 13px/1.45 var(--sans);
         display: flex;
         flex-direction: column;
         overflow: hidden;
       }
+
+      /* ---------- header ---------- */
       header {
         height: 48px;
         flex: none;
         display: flex;
         align-items: center;
-        gap: 20px;
+        gap: 16px;
         padding: 0 16px;
         border-bottom: 1px solid var(--line);
         background: var(--panel);
@@ -61,26 +68,10 @@
         font-weight: 400;
         margin-left: 8px;
       }
-      .legend {
-        display: flex;
-        gap: 14px;
+      .hint {
         color: var(--muted);
         font-size: 12px;
         margin-left: auto;
-      }
-      .legend i {
-        display: inline-block;
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        vertical-align: -1px;
-        margin-right: 5px;
-      }
-      .legend .m {
-        background: var(--main);
-      }
-      .legend .r {
-        background: var(--rend);
       }
       .controls {
         display: flex;
@@ -102,19 +93,23 @@
         outline: 2px solid var(--rend);
         outline-offset: 1px;
       }
+      button.primary {
+        border-color: var(--rend);
+        color: var(--rend);
+      }
 
       main {
         flex: 1;
         min-height: 0;
         display: grid;
-        grid-template-columns: 1fr 360px;
+        grid-template-columns: 1fr 400px;
       }
 
       /* ---------- diagram ---------- */
       .diagram {
         display: grid;
         grid-template-rows: auto 34px 1fr;
-        gap: 10px;
+        gap: 12px;
         padding: 14px;
         min-height: 0;
       }
@@ -148,7 +143,7 @@
       .proc.rend .proc-title {
         color: var(--rend);
       }
-      .proc-title .path {
+      .path {
         font: 11px var(--mono);
         color: var(--muted);
         letter-spacing: 0;
@@ -165,12 +160,11 @@
         background: var(--panel-2);
         padding: 8px 10px;
         min-width: 0;
-        transition: box-shadow 0.15s;
+        transition: box-shadow 0.15s, border-color 0.15s;
       }
       .box-title {
         font-size: 11px;
         font-weight: 600;
-        color: var(--text);
         margin-bottom: 6px;
       }
       .box-title span {
@@ -229,23 +223,32 @@
         overflow: hidden;
         text-overflow: ellipsis;
       }
+
+      /* clickable things */
+      [data-explain] {
+        cursor: pointer;
+      }
+      .hover {
+        box-shadow: 0 0 0 1px var(--muted);
+      }
+      .selected {
+        box-shadow: 0 0 0 2px var(--text) !important;
+      }
+
+      /* live flashes */
       .flash-main {
         background: var(--main-dim) !important;
         border-color: var(--main) !important;
-        box-shadow: 0 0 0 2px var(--main-dim);
       }
       .flash-rend {
         background: var(--rend-dim) !important;
         border-color: var(--rend) !important;
-        box-shadow: 0 0 0 2px var(--rend-dim);
       }
       .flash-ok {
         border-color: var(--ok) !important;
-        box-shadow: 0 0 0 2px rgba(63, 185, 80, 0.25);
       }
       .flash-bad {
         border-color: var(--bad) !important;
-        box-shadow: 0 0 0 2px rgba(248, 81, 73, 0.25);
       }
 
       .boundary {
@@ -255,6 +258,8 @@
         color: var(--muted);
         font: 11px var(--mono);
         letter-spacing: 0.04em;
+        border-radius: 6px;
+        padding: 0 6px;
       }
       .boundary::before,
       .boundary::after {
@@ -276,19 +281,15 @@
       }
       .slot-wrap {
         flex: 1;
-        min-height: 200px;
+        min-height: 180px;
         display: flex;
         flex-direction: column;
+        border-radius: 6px;
       }
       .slot {
         flex: 1;
         border: 1px dashed var(--line);
         border-radius: 6px;
-        background: repeating-linear-gradient(
-          45deg,
-          transparent 0 8px,
-          rgba(255, 255, 255, 0.02) 8px 16px
-        );
       }
       .verdict-applied {
         color: var(--ok);
@@ -300,31 +301,40 @@
         color: var(--bad);
       }
 
-      /* ---------- log ---------- */
-      .log {
+      /* ---------- side column: explanation or log ---------- */
+      .side {
         border-left: 1px solid var(--line);
         background: var(--panel);
         display: flex;
         flex-direction: column;
         min-height: 0;
       }
-      .log-title {
+      .side-title {
         flex: none;
-        padding: 10px 12px;
+        padding: 10px 14px;
         font-size: 11px;
         font-weight: 700;
         letter-spacing: 0.08em;
         border-bottom: 1px solid var(--line);
         display: flex;
         justify-content: space-between;
+        align-items: center;
+        gap: 8px;
       }
-      .log-title span {
+      .side-title span {
         color: var(--muted);
         font-weight: 400;
         letter-spacing: 0;
         font-family: var(--mono);
       }
-      ol {
+      .log,
+      .explain {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        flex: 1;
+      }
+      ol.entries {
         list-style: none;
         margin: 0;
         padding: 6px 0;
@@ -332,11 +342,11 @@
         flex: 1;
         font: 11.5px/1.5 var(--mono);
       }
-      li {
+      ol.entries li {
         display: grid;
         grid-template-columns: 62px 44px 1fr;
         gap: 8px;
-        padding: 1px 12px;
+        padding: 1px 14px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -361,6 +371,81 @@
       li .e {
         overflow: hidden;
         text-overflow: ellipsis;
+      }
+
+      .explain-body {
+        overflow-y: auto;
+        padding: 14px 18px 24px;
+        max-width: 62ch;
+        font-size: 13.5px;
+        line-height: 1.55;
+      }
+      .explain-body h2 {
+        font-size: 17px;
+        margin: 0 0 2px;
+        font-weight: 700;
+        letter-spacing: 0;
+      }
+      .explain-body .file {
+        font: 11.5px var(--mono);
+        color: var(--muted);
+        margin-bottom: 14px;
+      }
+      .explain-body .who {
+        font-size: 14.5px;
+        font-weight: 600;
+        margin: 0 0 14px;
+        padding-left: 10px;
+        border-left: 3px solid var(--line);
+      }
+      .explain-body h3 {
+        font-size: 10.5px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 18px 0 6px;
+        font-weight: 700;
+      }
+      .explain-body p {
+        margin: 0 0 8px;
+      }
+      .explain-body ol {
+        margin: 0;
+        padding-left: 20px;
+      }
+      .explain-body ol li {
+        margin-bottom: 5px;
+      }
+      .explain-body dl {
+        margin: 0;
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 4px 12px;
+      }
+      .explain-body dt {
+        font: 12px var(--mono);
+        color: var(--text);
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .explain-body dd {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12.5px;
+      }
+      .explain-body .watch {
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 8px 10px;
+        background: var(--panel-2);
+      }
+      .explain.main-topic h2,
+      .explain.main-topic .who {
+        border-color: var(--main);
+      }
+      .explain.rend-topic h2,
+      .explain.rend-topic .who {
+        border-color: var(--rend);
       }
 
       /* ---------- wires ---------- */
@@ -397,109 +482,116 @@
   <body>
     <header>
       <div class="brand">electron-sync-store <span>live architecture</span></div>
-      <div class="legend">
-        <span><i class="m"></i>main process</span>
-        <span><i class="r"></i>renderer process</span>
-        <span>· dots are IPC messages, slowed for the eye; real times in the log</span>
-      </div>
+      <div class="hint">click any box to hear it explain itself</div>
       <div class="controls">
-        <button data-reload="a">reload renderer A</button>
-        <button data-reload="b">reload renderer B</button>
-        <button id="clear">clear log</button>
+        <button class="primary" data-topic="overview">how to read this</button>
+        <button data-reload="a">reload A</button>
+        <button data-reload="b">reload B</button>
       </div>
     </header>
 
     <main>
       <section class="diagram">
-        <div class="proc main">
+        <div class="proc main" data-explain="main">
           <div class="proc-title">
             MAIN PROCESS <span class="path">Node · src/main/index.ts</span>
           </div>
           <div class="main-grid">
-            <div class="box" id="box-store">
+            <div class="box" id="box-store" data-explain="store">
               <div class="box-title">store <span>src/core/store.ts</span></div>
               <div class="kv"><span>seq</span><b id="main-seq">0</b></div>
               <div class="kv"><span>subscribers</span><b id="main-subs">0</b></div>
               <pre id="main-state">—</pre>
             </div>
-            <div class="box" id="box-reducer">
+            <div class="box" id="box-reducer" data-explain="reducer">
               <div class="box-title">reducer <span>example/state.ts</span></div>
               <div class="muted" id="reducer-last">idle</div>
             </div>
             <div class="box">
               <div class="box-title">IPC handlers <span>ipcMain</span></div>
-              <div class="chip" id="h-snapshot-sync">
-                snapshot-sync <em>on · event.returnValue</em>
+              <div class="chip" id="h-snapshot-sync" data-explain="h-snapshot-sync">
+                snapshot-sync <em>bootstrap · blocking</em>
               </div>
-              <div class="chip" id="h-snapshot">
-                snapshot <em>handle · resync</em>
+              <div class="chip" id="h-snapshot" data-explain="h-snapshot">
+                snapshot <em>resync · async</em>
               </div>
-              <div class="chip" id="h-dispatch">dispatch <em>on · fire-and-forget</em></div>
-              <div class="chip" id="h-broadcast">
-                update <em>webContents.send · to all</em>
+              <div class="chip" id="h-dispatch" data-explain="h-dispatch">
+                dispatch <em>fire-and-forget</em>
+              </div>
+              <div class="chip" id="h-broadcast" data-explain="h-broadcast">
+                update <em>broadcast to all</em>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="boundary">
-          process boundary · IPC · every message is copied (structured clone), never shared
+        <div class="boundary" data-explain="boundary">
+          process boundary · IPC · messages are copied, never shared
         </div>
 
         <div class="renderers">
-          <div class="proc rend">
+          <div class="proc rend" data-explain="renderer">
             <div class="proc-title">
               RENDERER A <span class="path" id="a-id">webContents —</span>
             </div>
             <div class="rend-row">
-              <div class="box">
+              <div class="box" data-explain="preload">
                 <div class="box-title">preload <span>src/preload/index.ts</span></div>
                 <div class="chip" id="a-preload">bridge <em id="a-boot">not booted</em></div>
               </div>
-              <div class="box" id="a-mirror">
+              <div class="box" id="a-mirror" data-explain="mirror">
                 <div class="box-title">mirror <span>src/renderer/index.ts</span></div>
                 <div class="kv"><span>lastSeq</span><b id="a-seq">—</b></div>
                 <div class="kv"><span>last update</span><b id="a-verdict">—</b></div>
                 <pre id="a-state">—</pre>
               </div>
             </div>
-            <div class="slot-wrap">
-              <div class="box-title">
-                page <span>example/index.html · a real WebContentsView</span>
-              </div>
+            <div class="slot-wrap" data-explain="page">
+              <div class="box-title">page <span>example/index.html · a real renderer</span></div>
               <div class="slot" id="slot-a"></div>
             </div>
           </div>
 
-          <div class="proc rend">
+          <div class="proc rend" data-explain="renderer">
             <div class="proc-title">
               RENDERER B <span class="path" id="b-id">webContents —</span>
             </div>
             <div class="rend-row">
-              <div class="box">
+              <div class="box" data-explain="preload">
                 <div class="box-title">preload <span>src/preload/index.ts</span></div>
                 <div class="chip" id="b-preload">bridge <em id="b-boot">not booted</em></div>
               </div>
-              <div class="box" id="b-mirror">
+              <div class="box" id="b-mirror" data-explain="mirror">
                 <div class="box-title">mirror <span>src/renderer/index.ts</span></div>
                 <div class="kv"><span>lastSeq</span><b id="b-seq">—</b></div>
                 <div class="kv"><span>last update</span><b id="b-verdict">—</b></div>
                 <pre id="b-state">—</pre>
               </div>
             </div>
-            <div class="slot-wrap">
-              <div class="box-title">
-                page <span>example/index.html · a real WebContentsView</span>
-              </div>
+            <div class="slot-wrap" data-explain="page">
+              <div class="box-title">page <span>example/index.html · a real renderer</span></div>
               <div class="slot" id="slot-b"></div>
             </div>
           </div>
         </div>
       </section>
 
-      <aside class="log">
-        <div class="log-title">EVENT LOG <span id="log-count">0</span></div>
-        <ol id="log"></ol>
+      <aside class="side">
+        <section class="explain" id="explain" hidden>
+          <div class="side-title">
+            EXPLANATION
+            <button id="explain-close">back to log</button>
+          </div>
+          <div class="explain-body" id="explain-body"></div>
+        </section>
+
+        <section class="log" id="log-panel">
+          <div class="side-title" data-explain="log">
+            EVENT LOG <span id="log-count">0</span>
+            <button id="clear">clear</button>
+          </div>
+          <ol class="entries" id="log"></ol>
+        </section>
       </aside>
     </main>
 

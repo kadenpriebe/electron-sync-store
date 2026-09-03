@@ -5,6 +5,7 @@
  * that moves is one real IPC message that already happened.
  */
 import type { Feed, PaneLabel, Rect, Slots } from "./demo-protocol";
+import { topics, type Topic } from "./explanations";
 import type { InspectorBridge } from "./inspector-preload";
 import type { AppState } from "./state";
 
@@ -399,6 +400,123 @@ new ResizeObserver(reportLayout).observe(panes.b.slot);
 window.addEventListener("resize", reportLayout);
 
 // ---------------------------------------------------------------------------
+// Explanations: click any box and it describes itself
+// ---------------------------------------------------------------------------
+
+const explainPanel = el("explain");
+const explainBody = el("explain-body");
+const logPanel = el("log-panel");
+let selected: HTMLElement | undefined;
+
+function section(title: string, ...children: (Node | string)[]): DocumentFragment {
+  const frag = document.createDocumentFragment();
+  const h = document.createElement("h3");
+  h.textContent = title;
+  frag.append(h, ...children);
+  return frag;
+}
+
+function paragraph(text: string, cls?: string): HTMLParagraphElement {
+  const p = document.createElement("p");
+  p.textContent = text;
+  if (cls) p.className = cls;
+  return p;
+}
+
+function renderTopic(topic: Topic, tone: "main" | "rend" | ""): void {
+  const h2 = document.createElement("h2");
+  h2.textContent = topic.title;
+
+  const file = document.createElement("div");
+  file.className = "file";
+  file.textContent = topic.file;
+
+  const steps = document.createElement("ol");
+  for (const step of topic.steps) {
+    const li = document.createElement("li");
+    li.textContent = step;
+    steps.append(li);
+  }
+
+  const terms = document.createElement("dl");
+  for (const [term, meaning] of topic.terms) {
+    const dt = document.createElement("dt");
+    dt.textContent = term;
+    const dd = document.createElement("dd");
+    dd.textContent = meaning;
+    terms.append(dt, dd);
+  }
+
+  explainBody.replaceChildren(
+    h2,
+    file,
+    paragraph(topic.who, "who"),
+    section("The picture", paragraph(topic.picture)),
+    section("What I actually do", steps),
+    section("Say it right", terms),
+    section("Why I am built this way", paragraph(topic.why)),
+    section("Watch for it", paragraph(topic.watch, "watch")),
+  );
+  explainBody.scrollTop = 0;
+
+  explainPanel.className = `explain ${tone ? `${tone}-topic` : ""}`;
+  explainPanel.hidden = false;
+  logPanel.hidden = true;
+}
+
+function select(target: HTMLElement | undefined, key: string): void {
+  const topic = topics[key];
+  if (!topic) return;
+  selected?.classList.remove("selected");
+  selected = target;
+  selected?.classList.add("selected");
+
+  const tone = target?.closest(".proc.main")
+    ? "main"
+    : target?.closest(".proc.rend")
+      ? "rend"
+      : "";
+  renderTopic(topic, tone);
+}
+
+function closeExplanation(): void {
+  selected?.classList.remove("selected");
+  selected = undefined;
+  explainPanel.hidden = true;
+  logPanel.hidden = false;
+}
+
+document.addEventListener("click", (event) => {
+  const origin = event.target as HTMLElement;
+  if (origin.closest("button")) return;
+  const target = origin.closest<HTMLElement>("[data-explain]");
+  if (!target) return;
+  select(target, target.dataset["explain"] ?? "");
+});
+
+// Hover highlights only the innermost clickable box, not every ancestor.
+let hovered: HTMLElement | undefined;
+document.addEventListener("mouseover", (event) => {
+  const target = (event.target as HTMLElement).closest<HTMLElement>("[data-explain]");
+  if (target === hovered) return;
+  hovered?.classList.remove("hover");
+  hovered = target ?? undefined;
+  hovered?.classList.add("hover");
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeExplanation();
+});
+
+el("explain-close").addEventListener("click", closeExplanation);
+
+for (const button of document.querySelectorAll<HTMLButtonElement>("[data-topic]")) {
+  button.addEventListener("click", () => {
+    select(undefined, button.dataset["topic"] ?? "");
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Controls
 // ---------------------------------------------------------------------------
 
@@ -421,3 +539,6 @@ el("clear").addEventListener("click", () => {
 
 inspector.onFeed(handle);
 inspector.ready(slots());
+
+// Open on the orientation text. The log takes over as soon as it is closed.
+select(undefined, "overview");
