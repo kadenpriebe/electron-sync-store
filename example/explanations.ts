@@ -15,6 +15,8 @@ export type Topic = {
   essence?: string;
   /** What I actually do, in order. */
   steps: string[];
+  /** Shown under "what the compiler refuses", as written. */
+  code?: string[];
 };
 
 export const topics: Record<string, Topic> = {
@@ -127,12 +129,22 @@ export const topics: Record<string, Topic> = {
 
   boundary: {
     title: "The wall between them",
-    file: "how messages cross",
+    file: "src/shared/serializable.ts",
     steps: [
       "A message is copied on the way out and rebuilt on the way in.",
       "Plain data makes the trip: numbers, text, lists, objects.",
-      "Live things do not: a function or a promise cannot cross.",
+      "A function or a promise does not: sending one throws.",
+      "Worse, some things arrive broken with no complaint. Anything built from a class arrives as plain data, and every action it could do is gone.",
+      "So the state is checked when you write it, not when it breaks: put something in the state that cannot make the trip and the build stops.",
       "This wall is the whole reason a window needs its own copy of the state.",
+    ],
+    code: [
+      "type State = {",
+      "  count: number",
+      "  bump(): void      ← the build stops here",
+      "}",
+      "",
+      "Type '() => void' is not assignable to type 'never'.",
     ],
   },
 

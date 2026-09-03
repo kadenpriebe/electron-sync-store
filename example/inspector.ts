@@ -629,12 +629,22 @@ function renderTopic(topic: Topic, tone: "main" | "rend" | ""): void {
     steps.append(li);
   }
 
+  const code: HTMLElement[] = [];
+  if (topic.code) {
+    const codeHeading = document.createElement("h3");
+    codeHeading.textContent = "What the compiler refuses";
+    const pre = document.createElement("pre");
+    pre.textContent = topic.code.join("\n");
+    code.push(codeHeading, pre);
+  }
+
   explainBody.replaceChildren(
     h2,
     file,
     ...(topic.essence ? [paragraph(topic.essence, "who")] : []),
     heading,
     steps,
+    ...code,
   );
   explainBody.scrollTop = 0;
   explainPanel.className = `explain ${tone ? `${tone}-topic` : ""}`;
