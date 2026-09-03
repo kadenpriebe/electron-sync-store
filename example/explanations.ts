@@ -70,7 +70,8 @@ export const topics: Record<string, Topic> = {
       "A window asks me to change something.",
       "I run the ask through the rules and get a new state.",
       "I add one to my change counter.",
-      "I send the new state, and that number, to every window.",
+      "I send the new state to every window, and say which changes that covers.",
+      "If several asks land in the same moment I answer them all, then send one message for the lot.",
       "Because there is only one of me, every window gets the same history in the same order.",
     ],
   },
@@ -113,7 +114,7 @@ export const topics: Record<string, Topic> = {
     title: "Fresh copy on request",
     file: "src/main/index.ts · the snapshot handler",
     steps: [
-      "A window sees a gap in the change numbers: it has 7 and just got 9.",
+      "A window has change 7, and the message that just arrived says it starts at 9. Something never reached it.",
       "It asks me for the whole state again.",
       "I hand it back, without freezing anything.",
       "The window throws away what it had and starts from mine.",
