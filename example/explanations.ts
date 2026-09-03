@@ -187,7 +187,7 @@ export const topics: Record<string, Topic> = {
       "The owner reports every ask it got, every rule it ran, and everything it sent.",
       "Each window reports what it guessed, sent and received.",
       "All of it lands here with a timestamp.",
-      "The times are real. A whole round trip is usually one or two milliseconds; the dots are slowed down on purpose.",
+      "The times are real. At real speed a whole round trip is one or two milliseconds, far too fast to watch, so the dots are slowed down. Choose a delay and they move at the true speed instead.",
     ],
   },
 };

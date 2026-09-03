@@ -331,10 +331,30 @@ function tempo(): number {
   return 1;
 }
 
+/**
+ * How long a dot takes to cross. When a delay has been chosen, a message
+ * really does take that long, so the dot takes exactly as long and the
+ * picture is true. At real speed a crossing is under a millisecond, which
+ * cannot be watched, so it is replayed slowly and the header says so.
+ */
+const SLOW_MOTION_MS = 420;
+
+let messageMs = 0;
+
+function crossing(): number {
+  return Math.round((messageMs || SLOW_MOTION_MS) * tempo());
+}
+
 /** Move a dot from one element to another. Resolves when it arrives. */
 function travel(from: HTMLElement, to: HTMLElement, color: "m" | "r" | "x"): Promise<void> {
-  const ms = Math.round(420 * tempo());
+  const ms = crossing();
   if (ms === 0) return Promise.resolve();
+  // A burst at a slow setting can put hundreds of messages in flight at once.
+  // Past the point where they can be told apart, the step still takes its real
+  // time but stops drawing another dot.
+  if (wires.childElementCount > 120) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
   return new Promise((resolve) => {
     const a = center(from);
     const b = center(to);
@@ -377,6 +397,15 @@ const queue: Array<() => Promise<void>> = [];
 let pumping = false;
 
 function enqueue(step: () => Promise<void>): void {
+  // With a delay set, the delay itself spaces the events out: each step runs
+  // the moment its event arrives, dots overlap exactly as the real messages
+  // do, and the picture keeps the real clock. At real speed the whole trip
+  // happens inside a millisecond, so the steps are played one after another
+  // instead — a replay, which the header says it is.
+  if (messageMs > 0) {
+    void step();
+    return;
+  }
   queue.push(step);
   if (!pumping) void pump();
 }
@@ -742,11 +771,25 @@ rejectButton.addEventListener("click", () => {
 // 25 asks from each window, all at once. The owner answers them one at a time.
 el("rush").addEventListener("click", () => inspector.rush(25));
 
+const dotsNote = el("dots-note");
+
+function setMessageMs(ms: number): void {
+  messageMs = ms;
+  dotsNote.textContent =
+    ms === 0 ? "dots: slow motion · a real trip is under 1 ms" : "dots: real time";
+  dotsNote.title =
+    ms === 0
+      ? "A crossing really takes under a millisecond, too fast to watch. The dots are a replay; the true times are on each window's line and in the log."
+      : `A crossing really takes ${ms} ms now, and that is how long each dot takes.`;
+}
+
 for (const button of document.querySelectorAll<HTMLButtonElement>("[data-latency]")) {
   button.addEventListener("click", () => {
     for (const other of document.querySelectorAll("[data-latency]")) other.classList.remove("on");
     button.classList.add("on");
-    inspector.latency(Number(button.dataset["latency"]));
+    const ms = Number(button.dataset["latency"]);
+    setMessageMs(ms);
+    inspector.latency(ms);
   });
 }
 
@@ -761,5 +804,6 @@ el("clear").addEventListener("click", () => {
 // ---------------------------------------------------------------------------
 
 inspector.onFeed(handle);
+setMessageMs(0);
 updateSide();
 inspector.ready(slots());
