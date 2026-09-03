@@ -19,7 +19,7 @@
         --main-dim: rgba(240, 168, 58, 0.16);
         --rend: #5aa9ff;
         --rend-dim: rgba(90, 169, 255, 0.16);
-        --you: #ffffff;
+        --accent: #ffffff;
         --ok: #3fb950;
         --warn: #d29922;
         --bad: #f85149;
@@ -93,8 +93,8 @@
         outline-offset: 1px;
       }
       button.primary {
-        border-color: var(--you);
-        color: var(--you);
+        border-color: var(--accent);
+        color: var(--accent);
       }
       button.on {
         background: var(--rend-dim);
@@ -531,75 +531,6 @@
         border-color: var(--rend);
       }
 
-      /* ---------- journey: you are the message ---------- */
-      .journey-card {
-        position: absolute;
-        left: 50%;
-        bottom: 22px;
-        transform: translateX(-50%);
-        width: min(640px, calc(100% - 40px));
-        background: #10151c;
-        border: 1px solid var(--you);
-        border-radius: 10px;
-        padding: 14px 18px 12px;
-        z-index: 60;
-        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
-      }
-      .journey-card .step {
-        font: 11px var(--mono);
-        color: var(--muted);
-        letter-spacing: 0.06em;
-        margin-bottom: 4px;
-      }
-      .journey-card h4 {
-        margin: 0 0 6px;
-        font-size: 15px;
-      }
-      .journey-card p {
-        margin: 0 0 10px;
-        font-size: 13.5px;
-        line-height: 1.55;
-      }
-      .journey-card .row {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-      }
-      .journey-card .row .spacer {
-        flex: 1;
-      }
-      .journey-card kbd {
-        font: 11px var(--mono);
-        color: var(--muted);
-        border: 1px solid var(--line);
-        border-radius: 4px;
-        padding: 1px 5px;
-      }
-      #you {
-        position: absolute;
-        width: 22px;
-        height: 22px;
-        margin: -11px 0 0 -11px;
-        border-radius: 50%;
-        background: var(--you);
-        color: var(--you);
-        box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.18), 0 0 18px currentColor;
-        transition: transform 0.6s cubic-bezier(0.3, 0, 0.2, 1);
-      }
-      #you::after {
-        content: "you";
-        position: absolute;
-        top: 26px;
-        left: 50%;
-        transform: translateX(-50%);
-        font: 600 11px var(--sans);
-        color: var(--you);
-        letter-spacing: 0.04em;
-      }
-      .journey-here {
-        box-shadow: 0 0 0 2px var(--you) !important;
-      }
-
       /* ---------- wires ---------- */
       #wires {
         position: fixed;
@@ -629,8 +560,7 @@
         color: var(--bad);
       }
       @media (prefers-reduced-motion: reduce) {
-        .dot,
-        #you {
+        .dot {
           transition-duration: 0.01s;
         }
       }
@@ -639,8 +569,7 @@
   <body>
     <header>
       <div class="brand">electron-sync-store <span>live architecture</span></div>
-      <button data-topic="overview">what is this?</button>
-      <button class="primary" id="journey-start">be a click</button>
+      <button class="primary" data-topic="overview">what is this?</button>
       <button id="details-toggle">show details</button>
       <div class="group" title="how long each message takes to cross between processes">
         <span>latency</span>
@@ -761,19 +690,6 @@
             </div>
           </div>
         </div>
-
-        <div class="journey-card" id="journey-card" hidden>
-          <div class="step" id="journey-step"></div>
-          <h4 id="journey-title"></h4>
-          <p id="journey-text"></p>
-          <div class="row">
-            <button id="journey-back">back</button>
-            <button class="primary" id="journey-next">next</button>
-            <span class="spacer"></span>
-            <kbd>←</kbd> <kbd>→</kbd> <kbd>esc</kbd>
-            <button id="journey-exit">exit</button>
-          </div>
-        </div>
       </section>
 
       <aside class="side">
@@ -800,11 +716,7 @@
               number snaps back when the owner says no.
             </p>
             <div class="actions">
-              <button class="primary" data-journey>
-                be a click
-                <small>become one message and follow it from click to pixel</small>
-              </button>
-              <button data-topic="overview">
+              <button class="primary" data-topic="overview">
                 what is this, in more words
                 <small>the picture everything else here reuses</small>
               </button>
@@ -834,7 +746,7 @@
       </aside>
     </main>
 
-    <div id="wires"><div id="you" hidden></div></div>
+    <div id="wires"></div>
     <script src="inspector.js"></script>
   </body>
 </html>
