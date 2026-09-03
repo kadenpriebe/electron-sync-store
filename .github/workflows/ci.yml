@@ -1,0 +1,45 @@
+# Typecheck, test and build on every push.
+#
+# Electron is never launched here. The library's own code has no Electron in
+# it — that is the point of src/core — and the parts that do are exercised by
+# the example, which needs a display. Those paths are checked by hand against
+# the running demo; see "What the tests do not cover" in the README rather than
+# assuming this workflow covers them.
+#
+# Electron 44 fetches its binary lazily on first run rather than in a postinstall
+# script, so `npm ci` is cheap. The variable below keeps that true if that ever
+# changes.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    name: node ${{ matrix.node }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+
+      # Every @ts-expect-error in test/serializable.test.ts is an assertion, so
+      # this step is a test run of its own.
+      - run: npm run typecheck
+
+      - run: npm test
+
+      - run: npm run build
