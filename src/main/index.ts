@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain } from "electron";
+import { ipcMain, type WebContents } from "electron";
 import { createStore, type Reducer, type Store } from "../core/store";
 import { CHANNELS, type Snapshot } from "../shared/protocol";
 
@@ -19,6 +19,23 @@ export function createMainStore<S, A>(
   /** How many changes have been applied, ever. Stamped on every message. */
   let seq = 0;
 
+  /**
+   * Every renderer that has bootstrapped. This, not the list of open windows,
+   * is who receives broadcasts: a window that never asked for the state has no
+   * mirror to keep current, and a renderer that is not a window at all (a
+   * WebContentsView, a webview) still needs one. A reload re-bootstraps the
+   * same webContents, which the Set absorbs.
+   */
+  const subscribers = new Set<WebContents>();
+
+  function subscribe(sender: WebContents): void {
+    if (subscribers.has(sender)) return;
+    subscribers.add(sender);
+    sender.once("destroyed", () => {
+      subscribers.delete(sender);
+    });
+  }
+
   const currentSnapshot = (): Snapshot<S> => ({
     state: store.getState(),
     seq,
@@ -31,6 +48,7 @@ export function createMainStore<S, A>(
   // window's preload will block forever waiting for a reply that no one is
   // listening for. createMainStore() is therefore called during app startup.
   ipcMain.on(CHANNELS.snapshotSync, (event) => {
+    subscribe(event.sender);
     event.returnValue = currentSnapshot();
   });
 
@@ -44,16 +62,17 @@ export function createMainStore<S, A>(
     store.dispatch(action);
   });
 
-  // Fan out every change to every live window.
+  // Fan out every change to every subscribed renderer.
   store.subscribe((state) => {
     seq += 1;
     const payload: Snapshot<S> = { state, seq };
 
-    for (const win of BrowserWindow.getAllWindows()) {
-      // A window can be torn down between this loop starting and reaching it;
-      // sending to destroyed webContents throws.
-      if (win.isDestroyed()) continue;
-      win.webContents.send(CHANNELS.update, payload);
+    for (const target of subscribers) {
+      // A renderer can be torn down between this loop starting and reaching
+      // it, before its "destroyed" listener has run; sending to destroyed
+      // webContents throws.
+      if (target.isDestroyed()) continue;
+      target.send(CHANNELS.update, payload);
     }
   });
 
