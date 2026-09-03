@@ -1,9 +1,9 @@
 /**
  * What each box in the inspector says about itself when clicked.
  *
- * Two things only: a sentence or two on what this is, and a short numbered
- * list of what it actually does. Written in the first person, in plain
- * English, for someone who has never seen this project.
+ * A short numbered list of what each one actually does, in the first person
+ * and in plain English, for someone who has never seen this project. Only the
+ * two panels a button opens lead with a sentence or two of prose.
  */
 
 export type Topic = {
@@ -11,8 +11,8 @@ export type Topic = {
   title: string;
   /** The file (or idea) this box stands for. */
   file: string;
-  /** A sentence or two: what I am and why I exist. */
-  essence: string;
+  /** A sentence or two, on the two panels a button opens. Boxes have none. */
+  essence?: string;
   /** What I actually do, in order. */
   steps: string[];
 };
@@ -49,8 +49,6 @@ export const topics: Record<string, Topic> = {
   main: {
     title: "The owner",
     file: "src/main/index.ts · the main process",
-    essence:
-      "I own the state and I am the only one allowed to change it. Every window has to ask me, and I answer one ask at a time.",
     steps: [
       "A window asks me to change something.",
       "I run the ask through the rules and get a new state.",
@@ -63,8 +61,6 @@ export const topics: Record<string, Topic> = {
   store: {
     title: "Where the state sits",
     file: "src/core/store.ts",
-    essence:
-      "I am the box the state sits in. I hold one value, swap it for a new one when told, and tell everyone who is listening.",
     steps: [
       "Someone reads the current value. No waiting — it is right here.",
       "Someone hands me a change. I pass it to the rules and keep what comes back.",
@@ -76,8 +72,6 @@ export const topics: Record<string, Topic> = {
   reducer: {
     title: "The rules",
     file: "example/state.ts",
-    essence:
-      "I am the app's rulebook. Hand me the current state and something someone wants to do, and I hand back the new state.",
     steps: [
       '"Add 1" means the count goes up by one.',
       '"Change the name" means the name is replaced.',
@@ -89,8 +83,6 @@ export const topics: Record<string, Topic> = {
   "h-snapshot-sync": {
     title: "First copy for a new window",
     file: "src/main/index.ts · the snapshot-sync handler",
-    essence:
-      "A window that just opened has nothing. It asks me once for the whole state and waits right there until I answer, so its very first line of code already has the data.",
     steps: [
       "A new window asks, and freezes while it waits.",
       "I add it to the list of windows I keep up to date.",
@@ -102,8 +94,6 @@ export const topics: Record<string, Topic> = {
   "h-snapshot": {
     title: "Fresh copy on request",
     file: "src/main/index.ts · the snapshot handler",
-    essence:
-      "The same answer as the first copy, but for a window that is already running and has noticed it missed something.",
     steps: [
       "A window sees a gap in the change numbers: it has 7 and just got 9.",
       "It asks me for the whole state again.",
@@ -115,8 +105,6 @@ export const topics: Record<string, Topic> = {
   "h-dispatch": {
     title: "Asks from windows",
     file: "src/main/index.ts · the dispatch handler",
-    essence:
-      "Windows cannot change the state. They ask me, and I always answer yes or no — to the window that asked, and to nobody else.",
     steps: [
       "An ask arrives, tagged with which window sent it and which of its asks it is.",
       "I run it through the rules.",
@@ -129,8 +117,6 @@ export const topics: Record<string, Topic> = {
   "h-broadcast": {
     title: "Every change, to every window",
     file: "src/main/index.ts · the update message",
-    essence:
-      "After any change I send the new state out to every window, with a number on it. The number is how a window can tell whether it missed one.",
     steps: [
       "The state changed.",
       "I add one to the number: 7, then 8, then 9.",
@@ -142,8 +128,6 @@ export const topics: Record<string, Topic> = {
   boundary: {
     title: "The wall between them",
     file: "how messages cross",
-    essence:
-      "The owner and the windows are separate programs with separate memory. Nothing is ever shared between them; everything is copied.",
     steps: [
       "A message is copied on the way out and rebuilt on the way in.",
       "Plain data makes the trip: numbers, text, lists, objects.",
@@ -155,8 +139,6 @@ export const topics: Record<string, Topic> = {
   renderer: {
     title: "One window",
     file: "a page, its copy of the state, and its door",
-    essence:
-      "I am one window: the page you can see, a full copy of the state, and a door to the owner. The window beside me is a completely separate program; we never talk to each other, only to the owner.",
     steps: [
       "Before my page loads, I fetch the state once.",
       "My page reads that copy instantly, with no waiting anywhere.",
@@ -168,8 +150,6 @@ export const topics: Record<string, Topic> = {
   preload: {
     title: "The door",
     file: "src/preload/index.ts",
-    essence:
-      "I run before the page does, and I am the only part of a window that can talk to the owner. I hand the page exactly four things it may use, and nothing else.",
     steps: [
       "I ask the owner for the state and wait for it. Nobody is looking at the window yet, so nobody is kept waiting.",
       "I hand the page four things: the state, a way to ask for a fresh copy, a way to send an ask, and a way to be told about changes.",
@@ -180,8 +160,6 @@ export const topics: Record<string, Topic> = {
   mirror: {
     title: "This window's copy",
     file: "src/renderer/index.ts",
-    essence:
-      "I am this window's copy of the state, with this window's unanswered guesses drawn on top. What the page shows is the two of them combined.",
     steps: [
       "You click. I show the result immediately and put the ask on a short waiting list.",
       "I send the ask to the owner.",
@@ -194,8 +172,6 @@ export const topics: Record<string, Topic> = {
   page: {
     title: "The app",
     file: "example/index.html · example/renderer.ts",
-    essence:
-      "I am the actual app you can see and click. I read the state and I ask for changes as if everything were local. I know nothing about windows, copies or messages.",
     steps: [
       "Read the state on my first line. It is already there.",
       "Draw it.",
@@ -207,8 +183,6 @@ export const topics: Record<string, Topic> = {
   log: {
     title: "What happened, in order",
     file: "every decision, as it was made",
-    essence:
-      "Every decision the library made, in the order it made them, with the real time each one happened.",
     steps: [
       "The owner reports every ask it got, every rule it ran, and everything it sent.",
       "Each window reports what it guessed, sent and received.",

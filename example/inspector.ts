@@ -600,7 +600,13 @@ function renderTopic(topic: Topic, tone: "main" | "rend" | ""): void {
     steps.append(li);
   }
 
-  explainBody.replaceChildren(h2, file, paragraph(topic.essence, "who"), heading, steps);
+  explainBody.replaceChildren(
+    h2,
+    file,
+    ...(topic.essence ? [paragraph(topic.essence, "who")] : []),
+    heading,
+    steps,
+  );
   explainBody.scrollTop = 0;
   explainPanel.className = `explain ${tone ? `${tone}-topic` : ""}`;
   explaining = true;
