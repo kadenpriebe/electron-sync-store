@@ -302,25 +302,43 @@ draws them. Same hook.
 
 ## What the tests do not cover
 
-38 tests across five files, all against the in-memory bridge. Being honest
-about the edge of that:
+Two layers, and the seam between them is worth naming.
 
-- The main-process code paths that need real Electron — a destroyed
-  `webContents` mid-broadcast, a window reloading and re-bootstrapping, the
-  blocking bootstrap itself — have **no automated coverage**. They are checked
-  by hand against the running demo, which is what **restart A** / **restart B**
-  are for. CI never launches Electron and does not pretend to.
-- One ordering edge is documented and left alone: a lost broadcast whose reply
-  arrives *after* the resync snapshot shows a guess twice until the reply lands.
-  It is unreachable over real FIFO IPC, where the reply precedes the broadcast
-  that exposes the gap, and reachable only through a deliberately reordering
-  bridge.
+`npm test` is 38 tests across five files, all against the in-memory bridge.
+That is the right seam for the store's logic and the wrong one for everything
+Electron owns, so those tests say nothing about the blocking bootstrap, a
+window reloading and re-bootstrapping, or a broadcast reaching two real
+renderer processes exactly once each.
+
+`npm run verify` covers that. It boots the real demo and drives it from
+outside, asserting on what actually happens in three processes:
+
+```
+  PASS  a click in A reaches B                              [A 1 B 1]
+  PASS  at 1.5 s A shows the guess and B has not heard      [A 2 B 1]
+  PASS  a refused click rolls back and says why             [rolled back: ...]
+  PASS  typing a name redraws neither count                 [A 2->2 B 4->4]
+  PASS  50 clicks at once are all answered                  [asks 50]
+  PASS  in far fewer messages than asks                     [sent out 1]
+  PASS  a restarted window re-bootstraps and keeps up       [A 53 B 53]
+  PASS  the next change reached each window exactly once    [2 arrivals]
+  PASS  no window ever reported a missing message
+```
+
+It needs a display, so CI does not run it, and CI does not pretend to.
+
+One ordering edge is documented and left alone: a lost broadcast whose reply
+arrives *after* the resync snapshot shows a guess twice until the reply lands.
+It is unreachable over real FIFO IPC, where the reply precedes the broadcast
+that exposes the gap, and reachable only through a deliberately reordering
+bridge.
 
 ## Scripts
 
 ```sh
 npm start        # build, then open the demo
-npm test         # vitest, 38 tests
+npm test         # vitest, 38 tests, no display needed
+npm run verify   # drive the real demo and assert on it, 16 checks
 npm run typecheck
 npm run build
 ```
