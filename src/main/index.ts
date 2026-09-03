@@ -8,6 +8,7 @@ import {
   type Snapshot,
   type Update,
 } from "../shared/protocol";
+import type { Serializable } from "../shared/serializable";
 import type { MainTraceEvent, Trace } from "../shared/trace";
 
 export type MainStoreOptions<S, A> = {
@@ -22,10 +23,16 @@ export type MainStoreOptions<S, A> = {
  * actions, and main decides. That is what gives every change a total order
  * for free — arrival order at a single owner IS the order of truth, with no
  * clocks to skew and no conflicts to resolve.
+ *
+ * This is the one place the application's state type enters the library, so it
+ * is where the crossing is enforced. `S & Serializable<S>` rather than
+ * `Serializable<S>` alone: the bare conditional type is not an inference site,
+ * so `S` would come out `unknown`; the intersection keeps inference working and
+ * reports the error on the offending property rather than on the whole type.
  */
 export function createMainStore<S, A>(
   reducer: Reducer<S, A>,
-  initialState: S,
+  initialState: S & Serializable<S>,
   options: MainStoreOptions<S, A> = {},
 ): Store<S, A> {
   const trace: Trace<MainTraceEvent<S, A>> = options.trace ?? (() => {});
