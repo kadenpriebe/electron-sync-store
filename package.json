@@ -2,12 +2,14 @@
   "name": "electron-sync-store",
   "version": "0.1.0",
   "description": "Synchronous global state across Electron's main and renderer processes.",
-  "main": "dist/src/index.js",
-  "types": "dist/src/index.d.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && npm run build:preload && npm run build:renderer && cp example/*.html dist/example/",
-    "build:preload": "esbuild example/preload.ts example/inspector-preload.ts --bundle --outdir=dist/example --format=cjs --platform=node --external:electron",
-    "build:renderer": "esbuild example/renderer.ts example/renderer-react.tsx example/inspector.ts --bundle --outdir=dist/example --format=iife --platform=browser --jsx=automatic --define:process.env.NODE_ENV=\\\"production\\\"",
+    "build": "npm run build:lib && npm run build:example",
+    "build:lib": "tsc -p tsconfig.lib.json",
+    "build:example": "npm run build:example:node && npm run build:example:web && cp example/*.html dist/example/",
+    "build:example:node": "esbuild example/main.ts example/preload.ts example/inspector-preload.ts --bundle --outdir=dist/example --format=cjs --platform=node --external:electron",
+    "build:example:web": "esbuild example/renderer.ts example/renderer-react.tsx example/inspector.ts --bundle --outdir=dist/example --format=iife --platform=browser --jsx=automatic --define:process.env.NODE_ENV=\\\"production\\\"",
     "typecheck": "tsc --noEmit",
     "start": "npm run build && electron dist/example/main.js",
     "test": "vitest run"
@@ -32,5 +34,44 @@
     "react-dom": "^19.2.8",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./main": {
+      "types": "./dist/main/index.d.ts",
+      "default": "./dist/main/index.js"
+    },
+    "./preload": {
+      "types": "./dist/preload/index.d.ts",
+      "default": "./dist/preload/index.js"
+    },
+    "./renderer": {
+      "types": "./dist/renderer/index.d.ts",
+      "default": "./dist/renderer/index.js"
+    },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "default": "./dist/react/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "!dist/example"
+  ],
+  "sideEffects": [
+    "./dist/preload/index.js"
+  ],
+  "peerDependencies": {
+    "electron": ">=28",
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
   }
 }

@@ -1,6 +1,0 @@
-{
-  /* What `npm run build` emits. The tests are type-checked by tsconfig.json
-     (editor, `npm run typecheck`) but never belong in dist/. */
-  "extends": "./tsconfig.json",
-  "include": ["src", "example"]
-}

@@ -1,0 +1,12 @@
+{
+  /* What ships. The example and the tests are type-checked by tsconfig.json
+     (the editor, `npm run typecheck`) but neither belongs in the package, and
+     rooting the build at src/ is what lets the subpaths in package.json read
+     like `./dist/main/index.js` rather than `./dist/src/main/index.js`. */
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src"]
+}
