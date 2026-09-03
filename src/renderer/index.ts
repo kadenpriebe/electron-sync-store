@@ -60,6 +60,21 @@ type Pending<A> = {
 };
 
 /**
+ * A name for one mirror, unique among the mirrors alive in one application.
+ *
+ * `crypto.randomUUID` exists everywhere but throws outside a secure context —
+ * a page served over http:// from a LAN address is not one — so its absence
+ * has to be discovered by calling it, not by looking for it.
+ */
+function newClientId(): string {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    return `mirror-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+}
+
+/**
  * The mirror: a full local copy of main's state, kept current by broadcast,
  * with this renderer's own unconfirmed changes applied on top.
  *
@@ -90,7 +105,7 @@ export function createRendererStore<S, A>(
   const bootstrap = bridge.initialState as Snapshot<S>;
 
   /** Random per store instance, so two mirrors can never claim each other's guesses. */
-  const client = crypto.randomUUID();
+  const client = newClientId();
   let counter = 0;
 
   let confirmed = bootstrap.state;
@@ -169,6 +184,14 @@ export function createRendererStore<S, A>(
       const applied = snapshot.seq > lastSeq;
       if (applied) advance(snapshot);
       trace({ kind: "resync-finished", seq: snapshot.seq, applied });
+    } catch (error) {
+      // Reported rather than thrown. The mirror is still behind, and the next
+      // broadcast will expose the same gap and ask again; a loose rejection
+      // here would say nothing about which window it came from.
+      trace({
+        kind: "resync-failed",
+        reason: error instanceof Error ? error.message : String(error),
+      });
     } finally {
       resyncInFlight = false;
     }

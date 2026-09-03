@@ -50,6 +50,11 @@ export type RendererTraceEvent<S, A> =
   /** The snapshot came back; applied only if newer than what arrived meanwhile. */
   | { kind: "resync-finished"; seq: number; applied: boolean }
   /**
+   * The snapshot could not be fetched. Not fatal: the mirror is still behind,
+   * and the next broadcast will expose the same gap and ask again.
+   */
+  | { kind: "resync-failed"; reason: string }
+  /**
    * What the page now sees: confirmed state with every pending guess replayed
    * on top. Emitted after every change to it, with how many guesses are
    * still waiting on main.

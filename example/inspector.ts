@@ -136,6 +136,8 @@ function describe(entry: Feed): string {
       }${answers(e.origins)}`;
     case "resync-started":
       return "missed a message · asking main for a fresh copy";
+    case "resync-failed":
+      return `could not get a fresh copy: ${e.reason} · will try on the next change`;
     case "resync-finished":
       return `fresh copy · change ${e.seq} · ${e.applied ? "used it" : "mine was newer, ignored"}`;
     default: {
@@ -604,6 +606,13 @@ function handle(entry: Feed): void {
     }
     case "resync-started": {
       enqueue(() => travel(at.preload(p), at.handler("snapshot"), "r"));
+      return;
+    }
+    case "resync-failed": {
+      enqueue(async () => {
+        setVerdict(p, "could not get a fresh copy · will try again", "verdict-gap");
+        await flash(at.mirror(p), "flash-bad");
+      });
       return;
     }
     case "resync-finished": {
