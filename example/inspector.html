@@ -19,6 +19,7 @@
         --main-dim: rgba(240, 168, 58, 0.16);
         --rend: #5aa9ff;
         --rend-dim: rgba(90, 169, 255, 0.16);
+        --you: #ffffff;
         --ok: #3fb950;
         --warn: #d29922;
         --bad: #f85149;
@@ -28,9 +29,15 @@
       * {
         box-sizing: border-box;
       }
-      /* Class rules below set display; without this they would beat the
-         hidden attribute and both side panels would show at once. */
       [hidden] {
+        display: none !important;
+      }
+      /* Progressive disclosure: .detail elements exist only in detailed view;
+         .strip elements are the calm view's one-line summaries. */
+      body:not(.detailed) .detail {
+        display: none !important;
+      }
+      body.detailed .strip {
         display: none !important;
       }
       html,
@@ -49,11 +56,11 @@
 
       /* ---------- header ---------- */
       header {
-        height: 48px;
+        height: 50px;
         flex: none;
         display: flex;
         align-items: center;
-        gap: 16px;
+        gap: 10px;
         padding: 0 16px;
         border-bottom: 1px solid var(--line);
         background: var(--panel);
@@ -62,28 +69,20 @@
         font-family: var(--mono);
         font-size: 13px;
         font-weight: 600;
+        margin-right: auto;
       }
       .brand span {
         color: var(--muted);
         font-weight: 400;
         margin-left: 8px;
       }
-      .hint {
-        color: var(--muted);
-        font-size: 12px;
-        margin-left: auto;
-      }
-      .controls {
-        display: flex;
-        gap: 8px;
-      }
       button {
-        font: 12px var(--sans);
+        font: 12.5px var(--sans);
         color: var(--text);
         background: var(--panel-2);
         border: 1px solid var(--line);
-        border-radius: 5px;
-        padding: 5px 10px;
+        border-radius: 6px;
+        padding: 6px 12px;
         cursor: pointer;
       }
       button:hover {
@@ -94,6 +93,11 @@
         outline-offset: 1px;
       }
       button.primary {
+        border-color: var(--you);
+        color: var(--you);
+      }
+      button.on {
+        background: var(--rend-dim);
         border-color: var(--rend);
         color: var(--rend);
       }
@@ -102,32 +106,33 @@
         flex: 1;
         min-height: 0;
         display: grid;
-        grid-template-columns: 1fr 400px;
+        grid-template-columns: 1fr 380px;
       }
 
       /* ---------- diagram ---------- */
       .diagram {
+        position: relative;
         display: grid;
-        grid-template-rows: auto 34px 1fr;
-        gap: 12px;
-        padding: 14px;
+        grid-template-rows: auto 36px 1fr;
+        gap: 14px;
+        padding: 16px;
         min-height: 0;
       }
       .proc {
         border: 1px solid var(--line);
-        border-radius: 8px;
+        border-radius: 10px;
         background: var(--panel);
-        padding: 10px 12px 12px;
+        padding: 12px 14px 14px;
         display: flex;
         flex-direction: column;
         gap: 10px;
         min-height: 0;
       }
       .proc.main {
-        border-color: rgba(240, 168, 58, 0.45);
+        border-color: rgba(240, 168, 58, 0.5);
       }
       .proc.rend {
-        border-color: rgba(90, 169, 255, 0.45);
+        border-color: rgba(90, 169, 255, 0.5);
       }
       .proc-title {
         display: flex;
@@ -135,7 +140,7 @@
         gap: 10px;
         font-weight: 700;
         letter-spacing: 0.08em;
-        font-size: 11px;
+        font-size: 11.5px;
       }
       .proc.main .proc-title {
         color: var(--main);
@@ -143,11 +148,36 @@
       .proc.rend .proc-title {
         color: var(--rend);
       }
+      .role {
+        color: var(--muted);
+        letter-spacing: 0;
+        font-weight: 400;
+        font-size: 12px;
+      }
       .path {
         font: 11px var(--mono);
         color: var(--muted);
         letter-spacing: 0;
         font-weight: 400;
+        margin-left: auto;
+      }
+      .strip {
+        font: 13px var(--mono);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--panel-2);
+        padding: 8px 12px;
+        display: flex;
+        gap: 18px;
+        align-items: baseline;
+        transition: border-color 0.15s, background 0.15s;
+      }
+      .strip span {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .strip b {
+        font-weight: 600;
       }
       .main-grid {
         display: grid;
@@ -160,7 +190,7 @@
         background: var(--panel-2);
         padding: 8px 10px;
         min-width: 0;
-        transition: box-shadow 0.15s, border-color 0.15s;
+        transition: box-shadow 0.15s, border-color 0.15s, background 0.15s;
       }
       .box-title {
         font-size: 11px;
@@ -220,11 +250,8 @@
         color: var(--muted);
         font-size: 10.5px;
         white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
       }
 
-      /* clickable things */
       [data-explain] {
         cursor: pointer;
       }
@@ -234,8 +261,6 @@
       .selected {
         box-shadow: 0 0 0 2px var(--text) !important;
       }
-
-      /* live flashes */
       .flash-main {
         background: var(--main-dim) !important;
         border-color: var(--main) !important;
@@ -256,7 +281,7 @@
         align-items: center;
         gap: 12px;
         color: var(--muted);
-        font: 11px var(--mono);
+        font: 11.5px var(--mono);
         letter-spacing: 0.04em;
         border-radius: 6px;
         padding: 0 6px;
@@ -271,7 +296,7 @@
       .renderers {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 14px;
+        gap: 16px;
         min-height: 0;
       }
       .rend-row {
@@ -301,7 +326,7 @@
         color: var(--bad);
       }
 
-      /* ---------- side column: explanation or log ---------- */
+      /* ---------- side column ---------- */
       .side {
         border-left: 1px solid var(--line);
         background: var(--panel);
@@ -311,7 +336,7 @@
       }
       .side-title {
         flex: none;
-        padding: 10px 14px;
+        padding: 10px 16px;
         font-size: 11px;
         font-weight: 700;
         letter-spacing: 0.08em;
@@ -320,6 +345,7 @@
         justify-content: space-between;
         align-items: center;
         gap: 8px;
+        min-height: 44px;
       }
       .side-title span {
         color: var(--muted);
@@ -327,12 +353,37 @@
         letter-spacing: 0;
         font-family: var(--mono);
       }
-      .log,
-      .explain {
+      .side > section {
         display: flex;
         flex-direction: column;
         min-height: 0;
         flex: 1;
+      }
+      .intro-body {
+        padding: 18px 20px;
+        font-size: 14px;
+        line-height: 1.6;
+        max-width: 60ch;
+      }
+      .intro-body p {
+        margin: 0 0 12px;
+      }
+      .intro-body .actions {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 18px;
+      }
+      .intro-body .actions button {
+        text-align: left;
+        padding: 10px 12px;
+        font-size: 13px;
+      }
+      .intro-body .actions small {
+        display: block;
+        color: var(--muted);
+        font-size: 11.5px;
+        margin-top: 2px;
       }
       ol.entries {
         list-style: none;
@@ -346,7 +397,7 @@
         display: grid;
         grid-template-columns: 62px 44px 1fr;
         gap: 8px;
-        padding: 1px 14px;
+        padding: 1px 16px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -372,10 +423,9 @@
         overflow: hidden;
         text-overflow: ellipsis;
       }
-
       .explain-body {
         overflow-y: auto;
-        padding: 14px 18px 24px;
+        padding: 14px 20px 24px;
         max-width: 62ch;
         font-size: 13.5px;
         line-height: 1.55;
@@ -384,7 +434,6 @@
         font-size: 17px;
         margin: 0 0 2px;
         font-weight: 700;
-        letter-spacing: 0;
       }
       .explain-body .file {
         font: 11.5px var(--mono);
@@ -424,7 +473,6 @@
       }
       .explain-body dt {
         font: 12px var(--mono);
-        color: var(--text);
         font-weight: 600;
         white-space: nowrap;
       }
@@ -439,13 +487,80 @@
         padding: 8px 10px;
         background: var(--panel-2);
       }
-      .explain.main-topic h2,
       .explain.main-topic .who {
         border-color: var(--main);
       }
-      .explain.rend-topic h2,
       .explain.rend-topic .who {
         border-color: var(--rend);
+      }
+
+      /* ---------- journey: you are the message ---------- */
+      .journey-card {
+        position: absolute;
+        left: 50%;
+        bottom: 22px;
+        transform: translateX(-50%);
+        width: min(640px, calc(100% - 40px));
+        background: #10151c;
+        border: 1px solid var(--you);
+        border-radius: 10px;
+        padding: 14px 18px 12px;
+        z-index: 60;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+      }
+      .journey-card .step {
+        font: 11px var(--mono);
+        color: var(--muted);
+        letter-spacing: 0.06em;
+        margin-bottom: 4px;
+      }
+      .journey-card h4 {
+        margin: 0 0 6px;
+        font-size: 15px;
+      }
+      .journey-card p {
+        margin: 0 0 10px;
+        font-size: 13.5px;
+        line-height: 1.55;
+      }
+      .journey-card .row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .journey-card .row .spacer {
+        flex: 1;
+      }
+      .journey-card kbd {
+        font: 11px var(--mono);
+        color: var(--muted);
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 1px 5px;
+      }
+      #you {
+        position: absolute;
+        width: 22px;
+        height: 22px;
+        margin: -11px 0 0 -11px;
+        border-radius: 50%;
+        background: var(--you);
+        color: var(--you);
+        box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.18), 0 0 18px currentColor;
+        transition: transform 0.6s cubic-bezier(0.3, 0, 0.2, 1);
+      }
+      #you::after {
+        content: "you";
+        position: absolute;
+        top: 26px;
+        left: 50%;
+        transform: translateX(-50%);
+        font: 600 11px var(--sans);
+        color: var(--you);
+        letter-spacing: 0.04em;
+      }
+      .journey-here {
+        box-shadow: 0 0 0 2px var(--you) !important;
       }
 
       /* ---------- wires ---------- */
@@ -473,7 +588,8 @@
         color: var(--rend);
       }
       @media (prefers-reduced-motion: reduce) {
-        .dot {
+        .dot,
+        #you {
           transition-duration: 0.01s;
         }
       }
@@ -482,21 +598,24 @@
   <body>
     <header>
       <div class="brand">electron-sync-store <span>live architecture</span></div>
-      <div class="hint">click any box to hear it explain itself</div>
-      <div class="controls">
-        <button class="primary" data-topic="overview">how to read this</button>
-        <button data-reload="a">reload A</button>
-        <button data-reload="b">reload B</button>
-      </div>
+      <button data-topic="overview">what is this?</button>
+      <button class="primary" id="journey-start">be a click</button>
+      <button id="details-toggle">show details</button>
+      <button class="detail" data-reload="a">reload A</button>
+      <button class="detail" data-reload="b">reload B</button>
     </header>
 
     <main>
-      <section class="diagram">
+      <section class="diagram" id="diagram">
         <div class="proc main" data-explain="main">
           <div class="proc-title">
-            MAIN PROCESS <span class="path">Node · src/main/index.ts</span>
+            MAIN PROCESS <span class="role">owns the state · the only writer</span>
+            <span class="path detail">src/main/index.ts</span>
           </div>
-          <div class="main-grid">
+          <div class="strip" id="main-strip">
+            <span>state</span><b id="main-strip-state">—</b>
+          </div>
+          <div class="main-grid detail">
             <div class="box" id="box-store" data-explain="store">
               <div class="box-title">store <span>src/core/store.ts</span></div>
               <div class="kv"><span>seq</span><b id="main-seq">0</b></div>
@@ -525,17 +644,22 @@
           </div>
         </div>
 
-        <div class="boundary" data-explain="boundary">
-          process boundary · IPC · messages are copied, never shared
+        <div class="boundary" id="boundary" data-explain="boundary">
+          process boundary · messages are copied across, never shared
         </div>
 
         <div class="renderers">
           <div class="proc rend" data-explain="renderer">
             <div class="proc-title">
-              RENDERER A <span class="path" id="a-id">webContents —</span>
+              RENDERER A <span class="role">a window · holds a copy</span>
+              <span class="path detail" id="a-id">webContents —</span>
             </div>
-            <div class="rend-row">
-              <div class="box" data-explain="preload">
+            <div class="strip" id="a-strip">
+              <span>copy</span><b id="a-strip-state">—</b>
+              <span>seq</span><b id="a-strip-seq">—</b>
+            </div>
+            <div class="rend-row detail">
+              <div class="box" id="a-preload-box" data-explain="preload">
                 <div class="box-title">preload <span>src/preload/index.ts</span></div>
                 <div class="chip" id="a-preload">bridge <em id="a-boot">not booted</em></div>
               </div>
@@ -547,17 +671,24 @@
               </div>
             </div>
             <div class="slot-wrap" data-explain="page">
-              <div class="box-title">page <span>example/index.html · a real renderer</span></div>
+              <div class="box-title" id="a-page-title">
+                page <span>the real window, live</span>
+              </div>
               <div class="slot" id="slot-a"></div>
             </div>
           </div>
 
           <div class="proc rend" data-explain="renderer">
             <div class="proc-title">
-              RENDERER B <span class="path" id="b-id">webContents —</span>
+              RENDERER B <span class="role">a window · holds a copy</span>
+              <span class="path detail" id="b-id">webContents —</span>
             </div>
-            <div class="rend-row">
-              <div class="box" data-explain="preload">
+            <div class="strip" id="b-strip">
+              <span>copy</span><b id="b-strip-state">—</b>
+              <span>seq</span><b id="b-strip-seq">—</b>
+            </div>
+            <div class="rend-row detail">
+              <div class="box" id="b-preload-box" data-explain="preload">
                 <div class="box-title">preload <span>src/preload/index.ts</span></div>
                 <div class="chip" id="b-preload">bridge <em id="b-boot">not booted</em></div>
               </div>
@@ -569,23 +700,69 @@
               </div>
             </div>
             <div class="slot-wrap" data-explain="page">
-              <div class="box-title">page <span>example/index.html · a real renderer</span></div>
+              <div class="box-title" id="b-page-title">
+                page <span>the real window, live</span>
+              </div>
               <div class="slot" id="slot-b"></div>
             </div>
+          </div>
+        </div>
+
+        <div class="journey-card" id="journey-card" hidden>
+          <div class="step" id="journey-step"></div>
+          <h4 id="journey-title"></h4>
+          <p id="journey-text"></p>
+          <div class="row">
+            <button id="journey-back">back</button>
+            <button class="primary" id="journey-next">next</button>
+            <span class="spacer"></span>
+            <kbd>←</kbd> <kbd>→</kbd> <kbd>esc</kbd>
+            <button id="journey-exit">exit</button>
           </div>
         </div>
       </section>
 
       <aside class="side">
-        <section class="explain" id="explain" hidden>
+        <section id="intro">
+          <div class="side-title">START HERE</div>
+          <div class="intro-body">
+            <p>
+              This is a live look inside a small library that keeps one piece of
+              state identical across the separate processes of an Electron app.
+            </p>
+            <p>
+              The box on top is the process that <b>owns</b> the state. The two
+              boxes below are two real windows; each holds a <b>copy</b>. Windows
+              never change their copy directly. They send a message up, the owner
+              decides, and the owner sends the result back down to everyone.
+            </p>
+            <p>Try it: click <b>+</b> in either window and watch the other one.</p>
+            <div class="actions">
+              <button class="primary" data-journey>
+                be a click
+                <small>become one message and follow it from click to pixel</small>
+              </button>
+              <button data-topic="overview">
+                what is this, in more words
+                <small>the picture everything else here reuses</small>
+              </button>
+              <button data-details>
+                show the details
+                <small>every file, every handler, and a live event log</small>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section id="explain" class="explain" hidden>
           <div class="side-title">
             EXPLANATION
-            <button id="explain-close">back to log</button>
+            <button id="explain-close">close</button>
           </div>
           <div class="explain-body" id="explain-body"></div>
         </section>
 
-        <section class="log" id="log-panel">
+        <section id="log-panel" hidden>
           <div class="side-title" data-explain="log">
             EVENT LOG <span id="log-count">0</span>
             <button id="clear">clear</button>
@@ -595,7 +772,7 @@
       </aside>
     </main>
 
-    <div id="wires"></div>
+    <div id="wires"><div id="you" hidden></div></div>
     <script src="inspector.js"></script>
   </body>
 </html>

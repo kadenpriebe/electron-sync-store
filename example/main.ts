@@ -48,6 +48,10 @@ app.whenReady().then(() => {
     webPreferences: {
       ...rendererPreferences,
       preload: path.join(__dirname, "inspector-preload.js"),
+      // The inspector animates from timers. Chromium throttles timers to once
+      // a second in a window it considers occluded, which turns the playback
+      // into a crawl if this window is behind another one.
+      backgroundThrottling: false,
     },
   });
 
