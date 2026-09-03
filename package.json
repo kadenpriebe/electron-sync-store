@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json && npm run build:preload && npm run build:renderer && cp example/*.html dist/example/",
     "build:preload": "esbuild example/preload.ts example/inspector-preload.ts --bundle --outdir=dist/example --format=cjs --platform=node --external:electron",
-    "build:renderer": "esbuild example/renderer.ts example/inspector.ts --bundle --outdir=dist/example --format=iife --platform=browser",
+    "build:renderer": "esbuild example/renderer.ts example/renderer-react.tsx example/inspector.ts --bundle --outdir=dist/example --format=iife --platform=browser --jsx=automatic --define:process.env.NODE_ENV=\\\"production\\\"",
     "typecheck": "tsc --noEmit",
     "start": "npm run build && electron dist/example/main.js",
     "test": "vitest run"

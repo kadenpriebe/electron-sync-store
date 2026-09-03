@@ -669,7 +669,8 @@ the wall between them · everything that crosses is a copy, never the original
         <div class="renderers">
           <div class="proc rend" data-explain="renderer">
             <div class="proc-title">
-              WINDOW A <span class="role">its own program · holds its own copy</span>
+              WINDOW A
+              <span class="role">its own program · plain TypeScript page</span>
               <span class="path detail" id="a-id">webContents —</span>
             </div>
             <div class="strip" id="a-strip">
@@ -707,7 +708,7 @@ the wall between them · everything that crosses is a copy, never the original
 
           <div class="proc rend" data-explain="renderer">
             <div class="proc-title">
-              WINDOW B <span class="role">its own program · holds its own copy</span>
+              WINDOW B <span class="role">its own program · React page</span>
               <span class="path detail" id="b-id">webContents —</span>
             </div>
             <div class="strip" id="b-strip">
@@ -735,9 +736,9 @@ the wall between them · everything that crosses is a copy, never the original
                 <pre id="b-state">—</pre>
               </div>
             </div>
-            <div class="slot-wrap" data-explain="page">
+            <div class="slot-wrap" data-explain="page-react">
               <div class="box-title" id="b-page-title">
-                the app itself <span>live, and really clickable</span>
+                the app itself <span>the same page, written in React</span>
               </div>
               <div class="slot" id="slot-b"></div>
             </div>

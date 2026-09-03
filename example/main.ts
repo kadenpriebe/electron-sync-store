@@ -154,7 +154,10 @@ app.whenReady().then(() => {
       side: "meta",
       event: { kind: "pane-created", id: pane.webContents.id, label },
     });
-    void pane.webContents.loadFile(path.join(__dirname, "index.html"));
+    // Window A is the vanilla page, window B the React one. Same library, same
+    // preload, same state; only the way the page is written differs.
+    const page = label === "b" ? "index-react.html" : "index.html";
+    void pane.webContents.loadFile(path.join(__dirname, page));
   }
 
   function place(slots: Slots): void {

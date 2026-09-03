@@ -201,13 +201,26 @@ export const topics: Record<string, Topic> = {
   },
 
   page: {
-    title: "The app",
+    title: "The app, in plain TypeScript",
     file: "example/index.html · example/renderer.ts",
     steps: [
       "Read the state on my first line. It is already there.",
       "Draw it.",
-      "Redraw it whenever it changes.",
+      "Watch the count and the name separately, and redraw only the one that moved.",
       "A button asks for a change, and the screen updates on that same line.",
+      "No framework anywhere in here. The window on the right does the same thing in React.",
+    ],
+  },
+
+  "page-react": {
+    title: "The same app, in React",
+    file: "example/renderer-react.tsx · src/react/index.ts",
+    steps: [
+      "I am the same page as the window on the left, written a different way.",
+      "The part that shows the count asks for the count only. The part that shows the name asks for the name only.",
+      "React redraws a part when the piece it asked for moves, and leaves it alone otherwise.",
+      "Type in the name box here and watch: the count is not redrawn once.",
+      "Nothing in the library knows React exists. This is two small pieces of glue over the same copy of the state.",
     ],
   },
 
