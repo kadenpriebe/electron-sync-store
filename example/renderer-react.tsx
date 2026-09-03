@@ -41,29 +41,34 @@ function useRedraws(): number {
 }
 
 /**
- * Both leaves take no props and are memoised, so nothing their parent does can
- * re-render them. The only thing that can is their own slice of the state
- * changing — which is what the counters underneath them are showing.
+ * Every leaf below takes no props and is memoised, so nothing its parent does
+ * can re-render it. The only thing that can is its own slice of the state
+ * moving — which is exactly what the two counters at the bottom are showing.
  */
 const Count = memo(function Count(): React.JSX.Element {
   const count = useStore(store, selectCount);
-  const redraws = useRedraws();
   return (
-    <>
-      <p className="count" id="count">
-        {count}
-      </p>
-      <p className="draws">
-        count redraws <b id="count-draws">{redraws}</b>
-      </p>
-    </>
+    <p className="count" id="count">
+      {count}
+    </p>
   );
+});
+
+const CountRedraws = memo(function CountRedraws(): React.JSX.Element {
+  useStore(store, selectCount);
+  const redraws = useRedraws();
+  return <b id="count-draws">{redraws}</b>;
+});
+
+const NameRedraws = memo(function NameRedraws(): React.JSX.Element {
+  useStore(store, selectUser);
+  const redraws = useRedraws();
+  return <b id="name-draws">{redraws}</b>;
 });
 
 const Name = memo(function Name(): React.JSX.Element {
   const user = useStore(store, selectUser);
   const dispatch = useDispatch(store);
-  const redraws = useRedraws();
   return (
     <>
       <label htmlFor="user-input">name</label>
@@ -76,9 +81,6 @@ const Name = memo(function Name(): React.JSX.Element {
       />
       <p>
         the name is <strong id="user">{user}</strong>
-      </p>
-      <p className="draws">
-        name redraws <b id="name-draws">{redraws}</b>
       </p>
     </>
   );
@@ -124,6 +126,9 @@ function App(): React.JSX.Element {
         {note}
       </p>
       <Name />
+      <p className="draws">
+        count redraws <CountRedraws /> · name redraws <NameRedraws />
+      </p>
     </div>
   );
 }
