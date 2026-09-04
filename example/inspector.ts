@@ -665,7 +665,7 @@ function renderTopic(topic: Topic, tone: "main" | "rend" | ""): void {
   file.textContent = topic.file;
 
   const heading = document.createElement("h3");
-  heading.textContent = "What I actually do";
+  heading.textContent = "Step by step";
 
   const steps = document.createElement("ol");
   for (const step of topic.steps) {
@@ -686,7 +686,8 @@ function renderTopic(topic: Topic, tone: "main" | "rend" | ""): void {
   explainBody.replaceChildren(
     h2,
     file,
-    ...(topic.essence ? [paragraph(topic.essence, "who")] : []),
+    paragraph(topic.plain, "who"),
+    ...(topic.essence ? [paragraph(topic.essence)] : []),
     heading,
     steps,
     ...code,

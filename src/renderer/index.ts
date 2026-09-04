@@ -78,6 +78,10 @@ function newClientId(): string {
  * The mirror: a full local copy of main's state, kept current by broadcast,
  * with this renderer's own unconfirmed changes applied on top.
  *
+ * "Renderer" here is Chromium's name for the process a page runs in, not a
+ * description of this file's job. Nothing below draws anything or touches the
+ * DOM; the page is separate code that reads this store.
+ *
  * This is what makes reads synchronous. `getState()` never touches IPC — it
  * returns a value already sitting in this renderer's memory.
  *
