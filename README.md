@@ -43,8 +43,10 @@ Three things to try:
   instantly, long before the message reaches main. That is the guess.
 - Press **make the owner say no**, then click. The guess was wrong, and the
   number snaps back the moment the answer arrives.
-- Press **50 clicks at once** and watch `asks` against `sent out`. Fifty asks;
-  three messages back.
+- Press **25 clicks in each window**. Both jump to 25 immediately — each
+  window’s own clicks, guessed locally — then both jump to 50 as the other
+  window’s changes arrive. Watch `asks` against `sent out`: fifty asks, a
+  handful of messages back.
 
 ---
 

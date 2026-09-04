@@ -64,7 +64,7 @@ const demo = {
   trace(event: unknown): void {
     ipcRenderer.send(DEMO.trace, { at: Date.now(), event });
   },
-  /** The inspector's "50 clicks at once" button, relayed through main. */
+  /** The inspector's "25 clicks in each window" button, relayed through main. */
   onRush(callback: (each: number) => void): void {
     ipcRenderer.on(DEMO.rush, (_event, each: number) => {
       callback(each);

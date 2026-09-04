@@ -49,7 +49,7 @@ export const topics: Record<string, Topic> = {
       "Click +. The number moves in 0 ms, before any message has left the window.",
       "The window can do that because it has the same rules the owner has, so it already knows the likely answer.",
       "The ask still goes to the owner and the answer still comes back. That is the second number next to the window.",
-      'Press "50 clicks at once" to hand the owner a pile of asks, and watch its answer time climb: it answers one at a time, so the last one waits for all the others.',
+      'Press "25 clicks in each window" to hand the owner fifty asks at once, and watch its answer time climb: it answers one at a time, so the last one waits for all the others.',
       "The number on the page never slows down, however long the answer takes.",
       "If the owner says no, that one guess is undone and the number snaps back.",
     ],
