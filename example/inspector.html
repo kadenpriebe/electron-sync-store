@@ -304,6 +304,26 @@
         font-size: 10.5px;
         white-space: nowrap;
       }
+      /* Three of the four channels are a window knocking; the fourth is the
+         owner speaking first. The box used to call all four "answers", which
+         made the update look like a reply to something. Each one now says who
+         starts it, on its own line under the description. */
+      .chip.channel {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 3px;
+      }
+      .chip.channel b {
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+      }
+      .chip.channel b.asks {
+        color: var(--rend);
+      }
+      .chip.channel b.tells {
+        color: var(--main);
+      }
 
       [data-explain] {
         cursor: pointer;
@@ -644,19 +664,23 @@
             </div>
             <div class="box">
               <div class="box-title">
-                what the owner answers <span>the four IPC handlers</span>
+                every message between them <span>the four IPC channels</span>
               </div>
-              <div class="chip" id="h-snapshot-sync" data-explain="h-snapshot-sync">
-                first copy, for a window that just opened <em>snapshot-sync</em>
+              <div class="chip channel" id="h-snapshot-sync" data-explain="h-snapshot-sync">
+                first copy, at startup
+                <em><b class="asks">a window asks</b> · snapshot-sync</em>
               </div>
-              <div class="chip" id="h-snapshot" data-explain="h-snapshot">
-                fresh copy, for a window that missed one <em>snapshot</em>
+              <div class="chip channel" id="h-snapshot" data-explain="h-snapshot">
+                fresh copy, after missing one
+                <em><b class="asks">a window asks</b> · snapshot</em>
               </div>
-              <div class="chip" id="h-dispatch" data-explain="h-dispatch">
-                asks from windows · answered yes or no <em>dispatch</em>
+              <div class="chip channel" id="h-dispatch" data-explain="h-dispatch">
+                may I change this? · yes or no
+                <em><b class="asks">a window asks</b> · dispatch</em>
               </div>
-              <div class="chip" id="h-broadcast" data-explain="h-broadcast">
-                every change, sent to every window <em>update</em>
+              <div class="chip channel" id="h-broadcast" data-explain="h-broadcast">
+                here is what changed · to every window
+                <em><b class="tells">the owner tells</b> · update</em>
               </div>
             </div>
           </div>
