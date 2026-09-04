@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "start": "npm run build && electron dist/example/main.js",
     "test": "vitest run",
-    "verify": "npm run build && electron scripts/verify-demo.js"
+    "verify": "npm run build && electron scripts/verify-demo.js",
+    "screenshots": "npm run build && electron scripts/screenshots.js --view=details && electron scripts/screenshots.js --view=calm"
   },
   "keywords": [
     "electron",

@@ -341,6 +341,7 @@ npm test         # vitest, 38 tests, no display needed
 npm run verify   # drive the real demo and assert on it, 16 checks
 npm run typecheck
 npm run build
+npm run screenshots   # regenerate the two pictures above from a real run
 ```
 
 `src/core/store.ts` has no Electron import in it, and that is enforced by the
