@@ -50,8 +50,12 @@ Three things to try:
 
 ## Install
 
+Not on npm. It is packaged as one — subpath exports, `files`, `sideEffects` —
+but publishing a name is permanent, and this has one consumer:
+
 ```sh
-npm install electron-sync-store
+git clone https://github.com/kadenpriebe/electron-sync-store
+cd electron-sync-store && npm install && npm start
 ```
 
 Electron is a peer dependency. React is an optional one, needed only for

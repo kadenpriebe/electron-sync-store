@@ -1,6 +1,10 @@
 {
   "name": "electron-sync-store",
   "version": "0.1.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kadenpriebe/electron-sync-store.git"
+  },
   "description": "Synchronous global state across Electron's main and renderer processes.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
